@@ -124,6 +124,7 @@ EFI_STATUS app_init(void)
     video_clear(&app.screen);
 
     config_load(&app.config, &app.entries);
+    video_enable_write_combining(app.config.write_combining);
     assets_load_fonts(&app.fonts, &app.config);
     assets_load_entries(&app.entries, &app.screen);
 

@@ -6,6 +6,7 @@
 #include "boot/secure_boot.h"
 #include "efi/fs.h"
 #include "efi/system.h"
+#include "efi/video.h"
 #include "lib/memory.h"
 
 EFI_STATUS image_loader_load(const CHAR16 *path, EFI_HANDLE *child)
@@ -48,5 +49,6 @@ EFI_STATUS image_loader_start(const CHAR16 *path)
         return status;
     }
 
+    video_release();
     return BS->StartImage(child, NULL, NULL);
 }

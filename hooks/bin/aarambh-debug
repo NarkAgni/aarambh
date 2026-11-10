@@ -285,6 +285,7 @@ check_esp() {
     show "ls -la '$ESP_ROOT/EFI' '$ESP_DIR'"
     show "sha256sum '$ESP_DIR/aarambh.efi'"
     show_file "$config"
+    show_file "$ESP_DIR/wc.state"
     show "head -n 40 '$ESP_DIR'/*.kernels"
     show "head -n 5 '$ESP_DIR'/next-*.cfg"
 
