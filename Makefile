@@ -106,7 +106,7 @@ test:
 
 qemu: $(TARGET)
 	./tests/qemu/run.sh $(if $(THEME),--theme $(THEME)) $(if $(DEFAULT),--default $(DEFAULT)) \
-		$(if $(SECURE_BOOT),--secure-boot)
+		$(if $(SECURE_BOOT),--secure-boot) $(if $(SECOND_ESP),--second-esp)
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -52,5 +52,5 @@ EFI_STATUS launcher_run(const Entry *entry, int kernel, const char *cmdline,
     }
 
     next_boot_write(entry, kernel);
-    return image_loader_start(entry->loader);
+    return image_loader_start(entry->device, entry->loader);
 }

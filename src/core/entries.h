@@ -11,6 +11,7 @@ typedef struct {
 } EntryList;
 
 void entries_add(EntryList *list, char **fields, int field_count);
+void entries_add_on(EntryList *list, EFI_HANDLE device, char **fields, int field_count);
 void entries_add_line(EntryList *list, char *line);
 void entries_add_actions(EntryList *list);
 

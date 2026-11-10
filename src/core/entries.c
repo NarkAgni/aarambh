@@ -64,7 +64,7 @@ static int resolve_target(Entry *entry, const char *target)
     entry->action = ENTRY_ACTION_EFI;
     fs_make_path(entry->loader, LOADER_PATH_MAX, target);
 
-    if (!fs_exists(entry->loader)) {
+    if (!fs_exists_on(entry->device, entry->loader)) {
         return 0;
     }
 
@@ -72,7 +72,7 @@ static int resolve_target(Entry *entry, const char *target)
     return 1;
 }
 
-void entries_add(EntryList *list, char **fields, int field_count)
+void entries_add_on(EntryList *list, EFI_HANDLE device, char **fields, int field_count)
 {
     Entry *entry;
 
@@ -86,6 +86,7 @@ void entries_add(EntryList *list, char **fields, int field_count)
 
     entry = &list->items[list->count];
     mem_set(entry, 0, sizeof(*entry));
+    entry->device = device;
 
     str_copy(entry->title, fields[0], sizeof(entry->title));
     str_copy(entry->logo_name, optional_field(fields, field_count, 2), sizeof(entry->logo_name));
@@ -98,6 +99,11 @@ void entries_add(EntryList *list, char **fields, int field_count)
     if (resolve_target(entry, fields[1])) {
         list->count++;
     }
+}
+
+void entries_add(EntryList *list, char **fields, int field_count)
+{
+    entries_add_on(list, NULL, fields, field_count);
 }
 
 void entries_add_line(EntryList *list, char *line)

@@ -16,6 +16,43 @@ EFI_STATUS fs_init(EFI_HANDLE device)
     return EFI_SUCCESS;
 }
 
+static EFI_FILE_HANDLE volume_root(EFI_HANDLE device)
+{
+    if (device == NULL) {
+        return root;
+    }
+
+    return LibOpenRoot(device);
+}
+
+static void volume_close(EFI_HANDLE device, EFI_FILE_HANDLE volume)
+{
+    if (device != NULL && volume != NULL) {
+        volume->Close(volume);
+    }
+}
+
+int fs_volumes(EFI_HANDLE *handles, int capacity)
+{
+    EFI_HANDLE *buffer = NULL;
+    UINTN found = 0;
+    int count = 0;
+    UINTN i;
+
+    if (EFI_ERROR(BS->LocateHandleBuffer(ByProtocol, &FileSystemProtocol, NULL, &found, &buffer))
+        || buffer == NULL) {
+        return 0;
+    }
+
+    for (i = 0; i < found && count < capacity; i++) {
+        handles[count] = buffer[i];
+        count++;
+    }
+
+    FreePool(buffer);
+    return count;
+}
+
 static int is_absolute(const char *name)
 {
     return name[0] == '\\' || name[0] == '/';
@@ -48,11 +85,12 @@ void fs_make_path(CHAR16 *output, int capacity, const char *name)
     output[length] = 0;
 }
 
-int fs_exists(const CHAR16 *path)
+static int exists_in(EFI_FILE_HANDLE volume, const CHAR16 *path)
 {
     EFI_FILE_HANDLE file;
 
-    if (root->Open(root, &file, (CHAR16 *)path, EFI_FILE_MODE_READ, 0) != EFI_SUCCESS) {
+    if (volume == NULL
+        || volume->Open(volume, &file, (CHAR16 *)path, EFI_FILE_MODE_READ, 0) != EFI_SUCCESS) {
         return 0;
     }
 
@@ -60,12 +98,27 @@ int fs_exists(const CHAR16 *path)
     return 1;
 }
 
-static EFI_FILE_HANDLE open_path(const CHAR16 *path, UINTN *size)
+int fs_exists(const CHAR16 *path)
+{
+    return exists_in(root, path);
+}
+
+int fs_exists_on(EFI_HANDLE device, const CHAR16 *path)
+{
+    EFI_FILE_HANDLE volume = volume_root(device);
+    int found = exists_in(volume, path);
+
+    volume_close(device, volume);
+    return found;
+}
+
+static EFI_FILE_HANDLE open_path_in(EFI_FILE_HANDLE volume, const CHAR16 *path, UINTN *size)
 {
     EFI_FILE_HANDLE file;
     EFI_FILE_INFO *info;
 
-    if (root->Open(root, &file, (CHAR16 *)path, EFI_FILE_MODE_READ, 0) != EFI_SUCCESS) {
+    if (volume == NULL
+        || volume->Open(volume, &file, (CHAR16 *)path, EFI_FILE_MODE_READ, 0) != EFI_SUCCESS) {
         return NULL;
     }
 
@@ -78,6 +131,11 @@ static EFI_FILE_HANDLE open_path(const CHAR16 *path, UINTN *size)
     *size = info->FileSize;
     FreePool(info);
     return file;
+}
+
+static EFI_FILE_HANDLE open_path(const CHAR16 *path, UINTN *size)
+{
+    return open_path_in(root, path, size);
 }
 
 static EFI_FILE_HANDLE open_for_read(const char *name, UINTN *size)
@@ -151,6 +209,17 @@ void *fs_read_path(const CHAR16 *path, UINTN *size)
     EFI_FILE_HANDLE file = open_path(path, &file_size);
 
     return read_whole(file, file_size, size);
+}
+
+void *fs_read_path_on(EFI_HANDLE device, const CHAR16 *path, UINTN *size)
+{
+    EFI_FILE_HANDLE volume = volume_root(device);
+    UINTN file_size = 0;
+    EFI_FILE_HANDLE file = open_path_in(volume, path, &file_size);
+    void *buffer = read_whole(file, file_size, size);
+
+    volume_close(device, volume);
+    return buffer;
 }
 
 int fs_size(const char *name, UINTN *size)
@@ -251,12 +320,15 @@ int fs_write_data(const char *name, const void *data, UINTN size)
 
 #define DIRECTORY_INFO_SIZE (SIZE_OF_EFI_FILE_INFO + 512)
 
-void fs_list_directory(const CHAR16 *path, FsDirectoryCallback callback, void *context)
+static void list_directory_in(EFI_FILE_HANDLE volume, const CHAR16 *path,
+                              FsDirectoryCallback callback, void *context)
 {
     EFI_FILE_HANDLE directory;
     UINT8 buffer[DIRECTORY_INFO_SIZE];
 
-    if (root->Open(root, &directory, (CHAR16 *)path, EFI_FILE_MODE_READ, 0) != EFI_SUCCESS) {
+    if (volume == NULL
+        || volume->Open(volume, &directory, (CHAR16 *)path, EFI_FILE_MODE_READ, 0)
+               != EFI_SUCCESS) {
         return;
     }
 
@@ -280,4 +352,18 @@ void fs_list_directory(const CHAR16 *path, FsDirectoryCallback callback, void *c
     }
 
     directory->Close(directory);
+}
+
+void fs_list_directory(const CHAR16 *path, FsDirectoryCallback callback, void *context)
+{
+    list_directory_in(root, path, callback, context);
+}
+
+void fs_list_directory_on(EFI_HANDLE device, const CHAR16 *path,
+                          FsDirectoryCallback callback, void *context)
+{
+    EFI_FILE_HANDLE volume = volume_root(device);
+
+    list_directory_in(volume, path, callback, context);
+    volume_close(device, volume);
 }

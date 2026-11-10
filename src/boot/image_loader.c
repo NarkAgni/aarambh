@@ -9,7 +9,7 @@
 #include "efi/video.h"
 #include "lib/memory.h"
 
-EFI_STATUS image_loader_load(const CHAR16 *path, EFI_HANDLE *child)
+EFI_STATUS image_loader_load(EFI_HANDLE device, const CHAR16 *path, EFI_HANDLE *child)
 {
     EFI_DEVICE_PATH *device_path;
     EFI_STATUS status;
@@ -18,12 +18,13 @@ EFI_STATUS image_loader_load(const CHAR16 *path, EFI_HANDLE *child)
 
     *child = NULL;
 
-    buffer = fs_read_path(path, &size);
+    buffer = fs_read_path_on(device, path, &size);
     if (buffer == NULL) {
         return EFI_NOT_FOUND;
     }
 
-    device_path = FileDevicePath(system_device_handle(), (CHAR16 *)path);
+    device_path = FileDevicePath(device != NULL ? device : system_device_handle(),
+                                 (CHAR16 *)path);
     if (device_path == NULL) {
         mem_free(buffer);
         return EFI_NOT_FOUND;
@@ -39,12 +40,12 @@ EFI_STATUS image_loader_load(const CHAR16 *path, EFI_HANDLE *child)
     return status;
 }
 
-EFI_STATUS image_loader_start(const CHAR16 *path)
+EFI_STATUS image_loader_start(EFI_HANDLE device, const CHAR16 *path)
 {
     EFI_HANDLE child;
     EFI_STATUS status;
 
-    status = image_loader_load(path, &child);
+    status = image_loader_load(device, path, &child);
     if (EFI_ERROR(status)) {
         return status;
     }

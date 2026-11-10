@@ -41,6 +41,7 @@ typedef struct {
     char background_name[128];
     char key[32];
     CHAR16 loader[256];
+    EFI_HANDLE device;
     EntryAction action;
     UINT32 accent;
     Image logo;

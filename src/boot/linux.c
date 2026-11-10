@@ -159,7 +159,7 @@ EFI_STATUS linux_boot(const Kernel *kernel, const char *cmdline, const PlymouthO
 
     fs_make_path(kernel_path, FS_PATH_MAX, kernel->kernel);
 
-    status = image_loader_load(kernel_path, &child);
+    status = image_loader_load(NULL, kernel_path, &child);
     if (EFI_ERROR(status)) {
         initrd_unregister();
         return status;

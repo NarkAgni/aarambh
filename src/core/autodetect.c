@@ -1,6 +1,7 @@
 #include "core/autodetect.h"
 
 #include "efi/fs.h"
+#include "efi/system.h"
 #include "lib/str.h"
 
 #define NAME_MAX 64
@@ -13,6 +14,7 @@ typedef struct {
 
 typedef struct {
     EntryList *list;
+    EFI_HANDLE device;
 } ScanContext;
 
 static const KnownLoader known_loaders[] = {
@@ -102,7 +104,7 @@ static const KnownLoader *find_known(const char *directory)
     return NULL;
 }
 
-static int find_loader(const char *directory, char *loader, int capacity)
+static int find_loader(EFI_HANDLE device, const char *directory, char *loader, int capacity)
 {
     int count = (int)(sizeof(loader_candidates) / sizeof(loader_candidates[0]));
     int i;
@@ -116,7 +118,7 @@ static int find_loader(const char *directory, char *loader, int capacity)
         str_append(loader, loader_candidates[i], capacity);
 
         fs_make_path(path, FS_PATH_MAX, loader);
-        if (fs_exists(path)) {
+        if (fs_exists_on(device, path)) {
             return 1;
         }
     }
@@ -141,7 +143,8 @@ static void lowercase(char *output, const char *input, int capacity)
     output[i] = '\0';
 }
 
-static void add_detected(EntryList *list, const char *directory, const char *loader)
+static void add_detected(EntryList *list, EFI_HANDLE device, const char *directory,
+                         const char *loader)
 {
     const KnownLoader *known = find_known(directory);
     char title[NAME_MAX];
@@ -175,7 +178,7 @@ static void add_detected(EntryList *list, const char *directory, const char *loa
     fields[3] = background;
     fields[4] = key;
 
-    entries_add(list, fields, 5);
+    entries_add_on(list, device, fields, 5);
 
     if (list->count > 0) {
         list->items[list->count - 1].autodetected = 1;
@@ -202,17 +205,34 @@ static int scan_directory(const CHAR16 *name, int is_directory, void *context)
         return 1;
     }
 
-    if (find_loader(directory, loader, sizeof(loader))) {
-        add_detected(scan->list, directory, loader);
+    if (find_loader(scan->device, directory, loader, sizeof(loader))) {
+        add_detected(scan->list, scan->device, directory, loader);
     }
 
     return 1;
 }
 
-void autodetect_entries(EntryList *list)
+static void scan_volume(EntryList *list, EFI_HANDLE device)
 {
     ScanContext context;
 
     context.list = list;
-    fs_list_directory(L"\\EFI", scan_directory, &context);
+    context.device = device;
+    fs_list_directory_on(device, L"\\EFI", scan_directory, &context);
+}
+
+void autodetect_entries(EntryList *list)
+{
+    EFI_HANDLE volumes[FS_MAX_VOLUMES];
+    EFI_HANDLE own = system_device_handle();
+    int count = fs_volumes(volumes, FS_MAX_VOLUMES);
+    int i;
+
+    scan_volume(list, NULL);
+
+    for (i = 0; i < count; i++) {
+        if (volumes[i] != own) {
+            scan_volume(list, volumes[i]);
+        }
+    }
 }
