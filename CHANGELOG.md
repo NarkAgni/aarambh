@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Countdown and animations ran far too slow on firmware whose `Stall()` waits
+  longer than asked (30 times on an LG gram 16Z90Q). The timer is now
+  calibrated from CPUID leaf 0x15 or a UEFI timer event, and frame pacing no
+  longer uses `Stall()`.
+
 ## [0.1.3] - 2026-11-10
 
 ### Added
