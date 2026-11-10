@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-10
+
+### Fixed
+
+- A first install stopped with "installation did not finish" after copying
+  every file, and the firmware boot entry was never created: with no Aarambh
+  entry yet, the lookup for it failed under `set -euo pipefail`. A second run
+  worked, so only new installs of 0.1.3 and 0.1.4 were hit.
+  Contributed by [@DrArzter](https://github.com/DrArzter) in
+  [#2](https://github.com/NarkAgni/aarambh/pull/2).
+- An EFI partition mounted root-only (`dmask=0077` or `umask=0077`, common on
+  Arch and archinstall) was not found, so `scripts/install.sh` could not start.
+  It is now also recognized by its partition type, which needs no root.
+  Contributed by [@DrArzter](https://github.com/DrArzter) in
+  [#2](https://github.com/NarkAgni/aarambh/pull/2).
+- CachyOS was taken for Debian's initramfs-tools because `cachyos-hooks` ships
+  an `update-initramfs` wrapper around `mkinitcpio`: the config edit failed,
+  kernel updates no longer refreshed the menu and the Plymouth `HOOKS` hint was
+  skipped. initramfs-tools now also needs `/etc/initramfs-tools`.
+  Contributed by [@DrArzter](https://github.com/DrArzter) in
+  [#2](https://github.com/NarkAgni/aarambh/pull/2).
+
+### Thanks
+
+- [Dipak Yadav (@dipakmdhrm)](https://github.com/dipakmdhrm) for the timer,
+  systemd-boot and write-combining fixes in 0.1.4
+  ([#1](https://github.com/NarkAgni/aarambh/pull/1)).
+- [@DrArzter](https://github.com/DrArzter) for the install, EFI partition and
+  CachyOS fixes in this release
+  ([#2](https://github.com/NarkAgni/aarambh/pull/2)).
+
 ## [0.1.4] - 2026-11-10
 
 ### Added
@@ -15,7 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through the PAT while it runs and restores the firmware's memory types
   before starting any system. Animation is smooth on panels where a full
   frame took about 120 ms to show (2560x1600). On by default;
-  `write_combining no` turns it off. Contributed by Dipak Yadav (#1).
+  `write_combining no` turns it off.
+  Contributed by [Dipak Yadav (@dipakmdhrm)](https://github.com/dipakmdhrm) in
+  [#1](https://github.com/NarkAgni/aarambh/pull/1).
 - `\EFI\aarambh\wc.state` records the first attempt, so a boot that hung with
   write-combining turns it off on the next boot by itself.
 - `scripts/install.sh` turns write-combining off inside virtual machines other
@@ -31,10 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Countdown and animations ran far too slow on firmware whose `Stall()` waits
   longer than asked (30 times on an LG gram 16Z90Q). The timer is now
   calibrated from CPUID leaf 0x15 or a UEFI timer event, and frame pacing no
-  longer uses `Stall()`. Contributed by Dipak Yadav (#1).
+  longer uses `Stall()`.
+  Contributed by [Dipak Yadav (@dipakmdhrm)](https://github.com/dipakmdhrm) in
+  [#1](https://github.com/NarkAgni/aarambh/pull/1).
 - The one-time kernel choice never reached systemd-boot: the
   `LoaderEntryOneShot` variable was written with a mistyped vendor GUID.
-  Contributed by Dipak Yadav (#1).
+  Contributed by [Dipak Yadav (@dipakmdhrm)](https://github.com/dipakmdhrm) in
+  [#1](https://github.com/NarkAgni/aarambh/pull/1).
 - The first restart after `make install` showed the plain restart splash
   instead of the chosen theme's: reinstalling the Plymouth theme dropped the
   restart and shutdown frames Aarambh drew for it. They are now copied back
@@ -143,7 +179,8 @@ First public release.
 - QEMU test runner (`make qemu THEME=... DEFAULT=...`) and automated hook tests
   (`make test`).
 
-[Unreleased]: https://github.com/NarkAgni/aarambh/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/NarkAgni/aarambh/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/NarkAgni/aarambh/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/NarkAgni/aarambh/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/NarkAgni/aarambh/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/NarkAgni/aarambh/compare/v0.1.1...v0.1.2
