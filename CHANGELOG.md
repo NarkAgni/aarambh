@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer than asked (30 times on an LG gram 16Z90Q). The timer is now
   calibrated from CPUID leaf 0x15 or a UEFI timer event, and frame pacing no
   longer uses `Stall()`.
+- The one-time kernel choice never reached systemd-boot: the
+  `LoaderEntryOneShot` variable was written with a mistyped vendor GUID.
 
 ## [0.1.3] - 2026-11-10
 
