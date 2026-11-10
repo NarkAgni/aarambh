@@ -405,8 +405,10 @@ scenario_arch_systemd_boot() {
 
 scenario_arch_grub() {
     new_root arch-grub
-    make_sandbox "$BIN_DIR" grub-mkconfig grub-probe mkinitcpio systemctl plymouthd \
-        plymouth-set-default-theme
+    # update-initramfs is present but is the CachyOS wrapper around mkinitcpio,
+    # so the expected commands below must stay mkinitcpio's.
+    make_sandbox "$BIN_DIR" grub-mkconfig grub-probe mkinitcpio update-initramfs \
+        systemctl plymouthd plymouth-set-default-theme
     os_release "Arch Linux" arch ""
     new_esp "$ROOT_DIR/efi"
     mkdir -p "$ESP/EFI/GRUB" "$ROOT_DIR/boot/grub" "$ROOT_DIR/usr/lib/plymouth"

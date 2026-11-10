@@ -275,7 +275,9 @@ register_boot_entry() {
     fi
 
     loader=$(boot_loader_path)
-    entry=$(aarambh_entry)
+    # No entry yet on a first install: grep exits 1 and pipefail would abort
+    # the script before efibootmgr -c below ever runs.
+    entry=$(aarambh_entry || true)
 
     if [ -n "$entry" ] && grep -qiF "$loader" <<< "$entry"; then
         put_first "$(entry_number "$entry")"

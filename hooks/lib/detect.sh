@@ -40,12 +40,25 @@ os_ids() {
     done
 }
 
+ESP_PARTTYPE=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+
 is_esp_mount() {
     local dir=$1
-    local fstype
+    local fstype source parttype
 
     fstype=$(findmnt -no FSTYPE --mountpoint "$dir" 2>/dev/null || true)
-    [ "$fstype" = vfat ] && [ -d "$dir/EFI" ]
+    [ "$fstype" = vfat ] || return 1
+
+    if [ -d "$dir/EFI" ]; then
+        return 0
+    fi
+
+    # Mounted with dmask=0077 (the default on Arch), so $dir/EFI is unreadable
+    # for the user running install.sh. Fall back to the partition type GUID,
+    # which needs no privileges.
+    source=$(findmnt -no SOURCE --mountpoint "$dir" 2>/dev/null || true)
+    parttype=$(lsblk -no PARTTYPE "$source" 2>/dev/null | head -n1)
+    [ "$parttype" = "$ESP_PARTTYPE" ]
 }
 
 detect_esp() {
@@ -65,7 +78,7 @@ detect_esp() {
 
     if has_command bootctl; then
         dir=$(bootctl --print-esp-path 2>/dev/null || true)
-        if [ -n "$dir" ] && [ -d "$dir/EFI" ]; then
+        if [ -n "$dir" ] && is_esp_mount "$dir"; then
             ESP_ROOT=$dir
             return 0
         fi
@@ -132,7 +145,10 @@ detect_bootloader() {
 }
 
 detect_initramfs_tool() {
-    if has_command update-initramfs; then
+    # CachyOS (cachyos-hooks) ships an update-initramfs wrapper that only calls
+    # mkinitcpio, so the name alone does not mean Debian's initramfs-tools; its
+    # config directory decides.
+    if has_command update-initramfs && [ -d "$ROOT/etc/initramfs-tools" ]; then
         INITRAMFS_TOOL=initramfs-tools
     elif has_command mkinitcpio; then
         INITRAMFS_TOOL=mkinitcpio
