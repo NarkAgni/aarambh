@@ -617,7 +617,10 @@ At boot time Aarambh:
 
 - reads files inside `\EFI\aarambh\`, kernel files named in `<id>.kernels`,
   and the folder names under `\EFI\` (for autodetect)
-- writes only `next-<id>.cfg` on the ESP
+- writes only `next-<id>.cfg`, the restart and shutdown splash images under
+  `shutdown\` and `wc.state` on the ESP
+- maps the framebuffer write-combining while the menu runs, and puts the
+  firmware's memory types back before it starts any system
 - writes firmware variables only when you act: `OsIndications` when you choose
   **Firmware**, `LoaderEntryOneShot` when it hands over to systemd-boot
 - has no network code and sends nothing anywhere
@@ -721,6 +724,36 @@ this system"** and returns to the menu instead of hanging.
 </details>
 
 <details>
+<summary><b>Smooth animation (write-combining)</b></summary>
+
+<br>
+
+Before an OS starts, firmware leaves the screen memory uncached, so a full
+frame on a high resolution panel can take over 100 ms to show. Aarambh maps
+the framebuffer write-combining through the CPU's page attribute table, the
+way Linux does once it runs, and restores the firmware's memory types before
+it starts any system.
+
+The first boot after installing records its progress in
+`\EFI\aarambh\wc.state`:
+
+| `wc.state`    | Meaning |
+|---------------|---------|
+| `trying`      | First attempt is running |
+| `ok`          | Frames were shown with write-combining; used on every boot |
+| `failed`      | A boot found `trying` left over (the attempt hung), so it stays off |
+| `unsupported` | The CPU or firmware cannot use it (no PAT, CET, 5-level paging) |
+
+If the menu ever hangs on that first boot, hold the power button: the next boot
+turns write-combining off by itself. Delete `wc.state` to try again.
+
+`scripts/install.sh` adds `write_combining no` inside virtual machines other
+than QEMU/KVM and on Apple or coreboot firmware, where it is untested. Add
+`write_combining no` or `yes` to `aarambh.conf` yourself to override it.
+
+</details>
+
+<details>
 <summary><b>Uninstall</b></summary>
 
 <br>
@@ -819,6 +852,7 @@ entry Firmware  | @firmware               | logos/settings.png | backgrounds/set
 | `default`      | Default entry: OS id (`ubuntu`, `fedora`, `windows`), menu title, or index starting at 0 |
 | `autodetect`   | `yes` adds loaders found under `\EFI\` (Windows, other OSes) |
 | `edit`         | `yes` (default) lets E edit boot options, `no` turns it off |
+| `write_combining` | `yes` (default) maps the screen write-combining for smooth animation, `no` keeps the firmware's slower path (see **Smooth animation** under *Safety and recovery*) |
 | `font_light`, `font_regular`, `font_bold`, `font_mono` | TTF paths     |
 | `utc_offset`   | Written by the hooks, e.g. `+0530`                    |
 | `entry`        | `title \| loader \| logo \| background \| key \| accent` |

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Write-combining framebuffer: the menu maps the screen write-combining
+  through the PAT while it runs and restores the firmware's memory types
+  before starting any system. Animation is smooth on panels where a full
+  frame took about 120 ms to show (2560x1600). On by default;
+  `write_combining no` turns it off.
+- `\EFI\aarambh\wc.state` records the first attempt, so a boot that hung with
+  write-combining turns it off on the next boot by itself.
+- `scripts/install.sh` turns write-combining off inside virtual machines other
+  than QEMU/KVM and on Apple or coreboot firmware. `aarambh-debug` shows
+  `wc.state`.
+
 ### Fixed
 
 - Countdown and animations ran far too slow on firmware whose `Stall()` waits

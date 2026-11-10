@@ -5,6 +5,7 @@
 
 #include "boot/image_loader.h"
 #include "boot/initrd.h"
+#include "efi/video.h"
 #include "lib/str.h"
 
 #define MAX_INITRD_PARTS 4
@@ -166,6 +167,7 @@ EFI_STATUS linux_boot(const Kernel *kernel, const char *cmdline, const PlymouthO
 
     attach_cmdline(child, cmdline != NULL ? cmdline : kernel->cmdline);
 
+    video_release();
     status = BS->StartImage(child, NULL, NULL);
     initrd_unregister();
     return status;

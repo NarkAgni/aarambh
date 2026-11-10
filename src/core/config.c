@@ -12,6 +12,7 @@ static void config_set_defaults(Config *config)
     config->timeout_seconds = 10;
     config->autodetect = 1;
     config->allow_edit = 1;
+    config->write_combining = 1;
     str_copy(config->theme, "accordion", sizeof(config->theme));
     str_copy(config->default_entry, "0", sizeof(config->default_entry));
     str_copy(config->font_light, "fonts/light.ttf", sizeof(config->font_light));
@@ -48,6 +49,8 @@ static void apply_setting(Config *config, EntryList *entries, const char *key, c
         config->autodetect = str_equal(value, "yes");
     } else if (str_equal(key, "edit")) {
         config->allow_edit = !str_equal(value, "no");
+    } else if (str_equal(key, "write_combining")) {
+        config->write_combining = !str_equal(value, "no");
     } else if (str_equal(key, "theme")) {
         str_copy(config->theme, value, sizeof(config->theme));
     } else if (str_equal(key, "font_light")) {

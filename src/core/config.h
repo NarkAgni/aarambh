@@ -13,6 +13,7 @@ typedef struct {
     int utc_offset_minutes;
     int autodetect;
     int allow_edit;
+    int write_combining;
     char theme[32];
     char default_entry[CONFIG_DEFAULT_MAX];
     char font_light[CONFIG_NAME_MAX];

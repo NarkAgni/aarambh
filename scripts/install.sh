@@ -211,6 +211,58 @@ aarambh_entry() {
     sudo efibootmgr -v | grep -E "^Boot[0-9A-Fa-f]{4}\*? $BOOT_LABEL" | head -n1
 }
 
+# Write-combining is only known to work with firmware that scans the
+# framebuffer out directly: real PCs and QEMU/KVM. Print why it should stay
+# off on this machine, or fail when nothing speaks against it.
+write_combining_blocker() {
+    local virt
+    local vendor
+
+    virt=$(systemd-detect-virt --vm 2>/dev/null || true)
+    case "$virt" in
+        ""|none|kvm|qemu) ;;
+        *)
+            echo "virtual machine ($virt)"
+            return 0
+            ;;
+    esac
+
+    vendor=$(cat /sys/class/dmi/id/sys_vendor /sys/class/dmi/id/bios_vendor 2>/dev/null || true)
+    case "$vendor" in
+        *Apple*)
+            echo "Apple firmware"
+            return 0
+            ;;
+        *coreboot*)
+            echo "coreboot firmware"
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+# Turn write-combining off where it is untested, unless the config already says.
+configure_write_combining() {
+    local config="$TARGET/aarambh.conf"
+    local reason
+
+    if sudo grep -qs '^write_combining[[:space:]]' "$config"; then
+        return 0
+    fi
+
+    reason=$(write_combining_blocker) || return 0
+
+    if [ "$DRY_RUN" = 1 ]; then
+        echo "  would add: write_combining no ($reason) to $config"
+        return 0
+    fi
+
+    log "write-combining off: $reason"
+    printf '\n# Off on this machine: %s\nwrite_combining no\n' "$reason" \
+        | sudo tee -a "$config" >/dev/null
+}
+
 register_boot_entry() {
     local loader
     local entry
@@ -254,6 +306,7 @@ fi
 
 remove_legacy_files
 copy_files
+configure_write_combining
 
 if [ "$DRY_RUN" = 1 ]; then
     sudo bash "$REPO/hooks/setup.sh" "${SETUP_ARGS[@]}" || true
