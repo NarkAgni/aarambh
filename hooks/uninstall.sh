@@ -30,6 +30,22 @@ for library in common detect manifest grub-config initramfs signing; do
     . "$HOOK_DIR/lib/$library.sh"
 done
 
+write_without_entry() {
+    local config=$1
+
+    ENTRY_KEY="$KEY" awk '
+        BEGIN { key = ENVIRON["ENTRY_KEY"] }
+        /^entry[ \t]/ {
+            split($0, fields, "|")
+            gsub(/^[ \t]+|[ \t]+$/, "", fields[5])
+            if (fields[5] == key) {
+                next
+            }
+        }
+        { print }
+    ' "$config" | replace_file "$config"
+}
+
 remove_menu_entry() {
     local config="$ESP_DIR/aarambh.conf"
 
@@ -42,17 +58,7 @@ remove_menu_entry() {
         return 0
     fi
 
-    ENTRY_KEY="$KEY" awk '
-        BEGIN { key = ENVIRON["ENTRY_KEY"] }
-        /^entry[ \t]/ {
-            split($0, fields, "|")
-            gsub(/^[ \t]+|[ \t]+$/, "", fields[5])
-            if (fields[5] == key) {
-                next
-            }
-        }
-        { print }
-    ' "$config" | replace_file "$config" \
+    with_config_lock write_without_entry "$config" \
         || warn "could not remove the '$KEY' entry from $config"
 }
 

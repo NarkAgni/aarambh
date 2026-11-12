@@ -19,11 +19,14 @@ FAILURES=0
 CFLAGS="-I$EFI_INC -I$EFI_INC/x86_64 -I$EFI_INC/protocol -Iinclude -Isrc -Ithird_party/stb -Itests/unit
         -std=gnu11 -g -O1 -fshort-wchar -fno-strict-aliasing -DGNU_EFI_USE_MS_ABI
         -Wall -Wextra -Wno-unused-parameter -Werror=implicit-function-declaration"
-SANITIZE="-fsanitize=address,undefined -fno-sanitize=alignment -fno-sanitize-recover=all"
+# stb_truetype reads 32-bit values as (byte << 24) on an int, which UBSan
+# calls a shift overflow; it is how stb is written, not a bounds problem.
+SANITIZE="-fsanitize=address,undefined -fno-sanitize=alignment,shift-base -fno-sanitize-recover=all"
 
 SUPPORT="tests/unit/support/efi_mock.c"
 LIBRARY="src/lib/memory.c src/lib/str.c src/lib/math.c"
-FONTS="src/gfx/font.c src/gfx/font_check.c third_party/stb/stb_impl.c"
+FONTS="src/gfx/font.c src/gfx/font_check.c src/gfx/font_cmap.c src/gfx/font_glyf.c third_party/stb/stb_impl.c"
+TEXT="src/gfx/text.c src/gfx/image.c"
 IMAGES="src/gfx/image.c src/gfx/image_effects.c src/gfx/image_scale.c src/gfx/sample.c src/gfx/color.c"
 
 # The boot menu never frees its glyphs and images; only bad accesses matter here.
@@ -70,16 +73,19 @@ unit() {
 run() {
     case "$1" in
         font) unit font $LIBRARY $FONTS ;;
+        font_structure) unit font_structure $LIBRARY $FONTS $TEXT tests/unit/support/font_edit.c ;;
+        text) unit text $LIBRARY $FONTS $TEXT tests/unit/support/font_edit.c ;;
         assets) unit assets $LIBRARY $FONTS $IMAGES src/core/assets.c ;;
         kernels) unit kernels $LIBRARY src/core/kernels.c src/boot/linux.c ;;
         navigation) unit navigation $LIBRARY src/core/navigation.c src/core/tween.c src/core/entry.c src/ui/easing.c ;;
         launcher) unit launcher $LIBRARY src/boot/launcher.c src/boot/next_boot.c src/core/entry.c ;;
         fs) unit fs $LIBRARY src/efi/fs.c ;;
+        config) unit config $LIBRARY src/core/config.c src/core/navigation.c src/core/tween.c src/core/entry.c src/ui/easing.c ;;
         *) echo "unknown test: $1"; FAILURES=$((FAILURES + 1)) ;;
     esac
 }
 
-for name in ${*:-font assets kernels navigation launcher fs}; do
+for name in ${*:-font font_structure text assets kernels navigation launcher fs config}; do
     run "$name"
 done
 

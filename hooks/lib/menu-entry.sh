@@ -53,19 +53,10 @@ menu_line() {
 }
 
 # Replace the line with this key, or insert it before the first action entry.
-register_menu_entry() {
-    local line
-    local config="$ESP_DIR/aarambh.conf"
+write_menu_entry() {
+    local config=$1
 
-    line=$(menu_line "$1")
-    log "menu entry: $line"
-
-    if [ "$DRY_RUN" = 1 ]; then
-        echo "  would update: $config"
-        return 0
-    fi
-
-    ENTRY_KEY="$KEY" ENTRY_LINE="$line" awk '
+    ENTRY_KEY="$KEY" ENTRY_LINE="$2" awk '
         BEGIN {
             key = ENVIRON["ENTRY_KEY"]
             line = ENVIRON["ENTRY_LINE"]
@@ -98,6 +89,21 @@ register_menu_entry() {
                 print line
             }
         }
-    ' "$config" "$config" | replace_file "$config" \
+    ' "$config" "$config" | replace_file "$config"
+}
+
+register_menu_entry() {
+    local line
+    local config="$ESP_DIR/aarambh.conf"
+
+    line=$(menu_line "$1")
+    log "menu entry: $line"
+
+    if [ "$DRY_RUN" = 1 ]; then
+        echo "  would update: $config"
+        return 0
+    fi
+
+    with_config_lock write_menu_entry "$config" "$line" \
         || die "could not update $config (is the EFI partition full or read-only?)"
 }

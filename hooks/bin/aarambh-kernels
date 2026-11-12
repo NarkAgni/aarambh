@@ -5,7 +5,8 @@
 #
 # The list is written next to the old one and replaces it in one rename, only
 # when it was generated completely. A failed run exits with 1 and leaves the
-# list of the last good run in place, so the menu keeps working.
+# list of the last good run in place, and every kernel copy it names, so the
+# menu keeps working.
 
 set -uo pipefail
 
@@ -48,16 +49,18 @@ lock_esp() {
     exec 9< "$ESP_DIR" && flock -w "$LOCK_WAIT_SECONDS" 9
 }
 
-update_utc_offset() {
-    local line
-
-    line="utc_offset $(date +%z)"
+write_utc_offset() {
+    local line=$1
 
     if [ ! -f "$CONFIG_FILE" ] || grep -qxF "$line" "$CONFIG_FILE"; then
         return 0
     fi
 
-    { grep -v '^utc_offset' "$CONFIG_FILE"; echo "$line"; } | replace_file "$CONFIG_FILE" \
+    { grep -v '^utc_offset' "$CONFIG_FILE"; echo "$line"; } | replace_file "$CONFIG_FILE"
+}
+
+update_utc_offset() {
+    with_config_lock write_utc_offset "utc_offset $(date +%z)" \
         || warn "could not update utc_offset in $CONFIG_FILE"
 }
 
@@ -74,15 +77,25 @@ is_complete_list() {
     awk -F'|' '
         NR == 1 { if ($0 !~ /^@oneshot (grub|systemd-boot|none)$/) exit 1; next }
         NF < 2 || $1 == "" || $2 == "" { exit 1 }
-    ' "$1"
+    '
 }
 
+# The list is generated in memory first: a scanner that fails stops here, and
+# a write cut short by a full EFI partition is caught by reading it back.
 publish_list() {
+    local list
     local scratch
+
+    list=$(generate_list) || return 1
+
+    if ! is_complete_list <<< "$list"; then
+        return 1
+    fi
 
     scratch=$(mktemp "$KERNEL_LIST.XXXXXX") || return 1
 
-    if generate_list > "$scratch" && is_complete_list "$scratch" && mv -f "$scratch" "$KERNEL_LIST"; then
+    if printf '%s\n' "$list" > "$scratch" && [ "$(cat "$scratch")" = "$list" ] \
+        && mv -f "$scratch" "$KERNEL_LIST"; then
         sync
         return 0
     fi
@@ -91,14 +104,31 @@ publish_list() {
     return 1
 }
 
+# A list is published before the copies it no longer names are deleted, so
+# the published list never names a missing file.
+refresh() {
+    if ! publish_list; then
+        die "the kernel list could not be generated, $KERNEL_LIST was left as it was"
+    fi
+
+    prune_direct_boot
+}
+
 if ! lock_esp; then
     die "another aarambh-kernels is still running, the kernel list was not refreshed"
 fi
 
 update_utc_offset
 
-if ! publish_list; then
-    die "the kernel list could not be generated, $KERNEL_LIST was left as it was"
-fi
+RECLAIM_FILE=$(mktemp) || die "no place for a temporary file"
+trap 'rm -f "$RECLAIM_FILE"' EXIT
+RECLAIM_MARKER=$RECLAIM_FILE
 
-prune_direct_boot
+refresh
+
+# No room for the new pair next to the old one: the list above starts the
+# newest kernel through the OS's loader and the old pair is gone now.
+if [ -s "$RECLAIM_FILE" ]; then
+    RECLAIM_MARKER=""
+    refresh
+fi

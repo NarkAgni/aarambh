@@ -1,33 +1,23 @@
 #include "gfx/font_check.h"
 
-#include <efi.h>
+#include "gfx/font_table.h"
 
 #define HEADER_SIZE       12
 #define RECORD_SIZE       16
 #define HEAD_MIN_SIZE     54
 #define HHEA_MIN_SIZE     36
 #define MAXP_MIN_SIZE     6
-#define CMAP_HEADER_SIZE  4
-#define CMAP_RECORD_SIZE  8
 #define LOCA_FORMAT_AT    50
 #define GLYPH_COUNT_AT    4
 #define METRIC_COUNT_AT   34
+#define ASCENT_AT         4
+#define DESCENT_AT        6
 #define HEAD_ADJUSTMENT_AT 8
 
-typedef struct {
-    const unsigned char *data;
-    UINT32 length;
-} Table;
+typedef FontTable Table;
 
-static UINT32 read16(const unsigned char *bytes)
-{
-    return ((UINT32)bytes[0] << 8) | bytes[1];
-}
-
-static UINT32 read32(const unsigned char *bytes)
-{
-    return (read16(bytes) << 16) | read16(bytes + 2);
-}
+#define read16 font_read16
+#define read32 font_read32
 
 static int same_tag(const unsigned char *bytes, const char *tag)
 {
@@ -114,59 +104,17 @@ static int find_table(const unsigned char *data, UINT32 offset, const char *tag,
     return 0;
 }
 
-static UINT32 subtable_length(const unsigned char *subtable, UINT32 available)
-{
-    UINT32 format;
-
-    if (available < 8) {
-        return 0;
-    }
-
-    format = read16(subtable);
-    if (format == 0 || format == 4 || format == 6) {
-        return read16(subtable + 2);
-    }
-    if (format == 12 || format == 13) {
-        return read32(subtable + 4);
-    }
-
-    return 0;
-}
-
-static int check_cmap(const Table *cmap)
-{
-    UINT32 count;
-    UINT32 i;
-
-    if (cmap->length < CMAP_HEADER_SIZE) {
-        return 0;
-    }
-
-    count = read16(cmap->data + 2);
-    if (CMAP_HEADER_SIZE + (UINT64)count * CMAP_RECORD_SIZE > cmap->length) {
-        return 0;
-    }
-
-    for (i = 0; i < count; i++) {
-        UINT32 start = read32(cmap->data + CMAP_HEADER_SIZE + i * CMAP_RECORD_SIZE + 4);
-        UINT32 length;
-
-        if (start >= cmap->length) {
-            return 0;
-        }
-
-        length = subtable_length(cmap->data + start, cmap->length - start);
-        if ((UINT64)start + length > cmap->length) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
+/*
+ * stb divides the pixel size by ascent minus descent; zero or less would
+ * give an infinite scale and glyph boxes that overflow.
+ */
 static int check_metrics(const Table *hhea, const Table *hmtx, UINT32 glyphs)
 {
     UINT32 metrics = read16(hhea->data + METRIC_COUNT_AT);
+
+    if (font_read_signed16(hhea->data + ASCENT_AT) - font_read_signed16(hhea->data + DESCENT_AT) <= 0) {
+        return 0;
+    }
 
     if (metrics == 0 || metrics > glyphs) {
         return 0;
@@ -183,6 +131,7 @@ static UINT32 glyph_start(const Table *loca, UINT32 index, int long_format)
     return read16(loca->data + index * 2) * 2;
 }
 
+/* Glyph offsets must rise and stay inside the glyph table, then each glyph is read. */
 static int check_outlines(const Table *loca, const Table *glyf, UINT32 glyphs, int long_format)
 {
     UINT32 entry_size = long_format ? 4 : 2;
@@ -202,7 +151,7 @@ static int check_outlines(const Table *loca, const Table *glyf, UINT32 glyphs, i
         previous = start;
     }
 
-    return 1;
+    return font_check_glyphs(loca, glyf, glyphs, long_format);
 }
 
 int font_check(const unsigned char *data, int size, int offset)
@@ -216,8 +165,8 @@ int font_check(const unsigned char *data, int size, int offset)
     Table maxp;
     Table loca;
     Table glyf;
-    Table cff;
     UINT32 glyphs;
+    UINT32 loca_format;
 
     if (data == NULL || size < HEADER_SIZE || offset < 0 || offset > size - HEADER_SIZE) {
         return 0;
@@ -227,7 +176,7 @@ int font_check(const unsigned char *data, int size, int offset)
         return 0;
     }
 
-    if (!find_table(data, base, "cmap", &cmap) || !check_cmap(&cmap)) {
+    if (!find_table(data, base, "cmap", &cmap) || !font_check_cmap(&cmap)) {
         return 0;
     }
 
@@ -237,10 +186,7 @@ int font_check(const unsigned char *data, int size, int offset)
         return 0;
     }
 
-    if (find_table(data, base, "CFF ", &cff)) {
-        return 1;
-    }
-
+    /* Only TrueType outlines: stb's CFF reader trusts its offsets too. */
     if (!find_table(data, base, "maxp", &maxp) || maxp.length < MAXP_MIN_SIZE
         || !find_table(data, base, "loca", &loca)
         || !find_table(data, base, "glyf", &glyf)) {
@@ -248,7 +194,8 @@ int font_check(const unsigned char *data, int size, int offset)
     }
 
     glyphs = read16(maxp.data + GLYPH_COUNT_AT);
+    loca_format = read16(head.data + LOCA_FORMAT_AT);
 
-    return check_metrics(&hhea, &hmtx, glyphs)
-        && check_outlines(&loca, &glyf, glyphs, read16(head.data + LOCA_FORMAT_AT) != 0);
+    return loca_format <= 1 && check_metrics(&hhea, &hmtx, glyphs)
+        && check_outlines(&loca, &glyf, glyphs, loca_format == 1);
 }

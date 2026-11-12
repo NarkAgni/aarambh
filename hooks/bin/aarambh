@@ -9,7 +9,7 @@
 #   -t, --theme <name>       Set the theme, e.g. cinema
 #   -d, --default <os>       Set the default entry: OS id (ubuntu, fedora,
 #                            windows), menu title or index
-#   -T, --timeout <seconds>  Set the countdown, 0 disables it
+#   -T, --timeout <seconds>  Set the countdown (0 to 999), 0 disables it
 #       --themes             List the themes
 #   -l, --list               List the menu entries
 #   -s, --status             Show the current theme, default and timeout
@@ -18,6 +18,7 @@
 set -uo pipefail
 
 LIB_DIR="${AARAMBH_LIB_DIR:-/usr/local/lib/aarambh}"
+TIMEOUT_MAX=999
 THEMES="accordion minimal glass-sidebar editorial editorial-dark cinema honeycomb constellation picker-wheel dial hud departures gallery"
 ACTIONS=()
 
@@ -91,7 +92,7 @@ config_value() {
     awk -v key="$1" '$1 == key { sub(/^[^ \t]+[ \t]*/, ""); value = $0 } END { print value }' "$CONFIG_FILE"
 }
 
-set_config_value() {
+write_config_value() {
     CONFIG_KEY="$1" CONFIG_VALUE="$2" awk '
         BEGIN {
             key = ENVIRON["CONFIG_KEY"]
@@ -115,33 +116,148 @@ set_config_value() {
                 print line
             }
         }
-    ' "$CONFIG_FILE" | replace_file "$CONFIG_FILE" \
+    ' "$CONFIG_FILE" | replace_file "$CONFIG_FILE"
+}
+
+# Read, change and replace under the lock every writer of aarambh.conf takes,
+# so a change made at the same time by another command is not lost.
+set_config_value() {
+    with_config_lock write_config_value "$1" "$2" \
         || die "could not update $CONFIG_FILE (is the EFI partition full or read-only?)"
     sync
 }
 
-configured_entries() {
+lowercase() {
+    printf '%s' "$1" | tr 'A-Z' 'a-z'
+}
+
+# The loaders aarambh.efi looks for in a folder under \EFI\ (autodetect.c),
+# in the same order.
+LOADER_CANDIDATES='shimx64.efi shim.efi grubx64.efi systemd-bootx64.efi refind_x64.efi Boot\bootmgfw.efi'
+
+# The file an ESP path (\EFI\ubuntu\shimx64.efi) names, matched without regard
+# to case as the firmware does. Fails when it does not exist.
+esp_file() {
+    local current=$ESP_ROOT
+    local parts
+    local part
+    local match
+
+    # shellcheck disable=SC1003,SC2141
+    IFS='\' read -r -a parts <<< "${1#\\}"
+
+    for part in "${parts[@]}"; do
+        if [ -z "$part" ]; then
+            continue
+        fi
+
+        match=$(find "$current" -mindepth 1 -maxdepth 1 -iname "$part" -print -quit 2>/dev/null)
+        if [ -z "$match" ]; then
+            return 1
+        fi
+        current=$match
+    done
+
+    [ -f "$current" ]
+}
+
+# "key|title|loader" for each entry line of aarambh.conf, in file order.
+config_entry_lines() {
     awk -F'|' '/^entry[ \t]/ {
         title = $1
+        loader = $2
         key = $5
         sub(/^entry[ \t]+/, "", title)
         gsub(/^[ \t]+|[ \t]+$/, "", title)
+        gsub(/^[ \t]+|[ \t]+$/, "", loader)
         gsub(/^[ \t]+|[ \t]+$/, "", key)
-        print key "|" title
+        print key "|" title "|" loader
     }' "$CONFIG_FILE"
 }
 
+# "key|title" of the configured operating systems that are in the menu: those
+# whose loader exists. aarambh.efi skips the others.
+configured_entries() {
+    local key
+    local title
+    local loader
+
+    while IFS='|' read -r key title loader; do
+        case "$loader" in
+            @*|'') ;;
+            *)
+                if esp_file "$loader"; then
+                    echo "$key|$title"
+                fi
+                ;;
+        esac
+    done < <(config_entry_lines)
+}
+
+# The folder under \EFI\ a loader path is in, lowercase.
+loader_folder() {
+    local path=${1#\\}
+
+    path=${path#[Ee][Ff][Ii]\\}
+    lowercase "${path%%\\*}"
+}
+
+configured_folders() {
+    local key
+    local title
+    local loader
+
+    while IFS='|' read -r key title loader; do
+        case "$loader" in
+            @*|'') ;;
+            *)
+                if esp_file "$loader"; then
+                    loader_folder "$loader"
+                    echo
+                fi
+                ;;
+        esac
+    done < <(config_entry_lines)
+}
+
+first_loader() {
+    local folder=$1
+    local candidate
+
+    for candidate in $LOADER_CANDIDATES; do
+        if esp_file "\\EFI\\$folder\\$candidate"; then
+            printf '%s\n' "\\EFI\\$folder\\$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# "key|folder" of the systems aarambh.efi adds by itself: the same folders,
+# skip rules and loader files as autodetect.c, and nothing with autodetect
+# turned off.
 detected_entries() {
     local directory
+    local folder
     local name
     local key
+    local used
 
-    for directory in "$ESP_ROOT"/EFI/*/; do
+    if grep -q '^autodetect\([ \t]\|$\)' "$CONFIG_FILE" && [ "$(config_value autodetect)" != yes ]; then
+        return 0
+    fi
+
+    used=$(configured_folders)
+
+    for directory in "$ESP_ROOT"/[Ee][Ff][Ii]/*/; do
         if [ ! -d "$directory" ]; then
             continue
         fi
 
-        name=$(basename "$directory" | tr 'A-Z' 'a-z')
+        folder=$(basename "$directory")
+        name=$(lowercase "$folder")
+
         case "$name" in
             boot|aarambh|linux|tools) continue ;;
             microsoft) key=windows ;;
@@ -151,32 +267,49 @@ detected_entries() {
             *) key=$name ;;
         esac
 
-        if ! configured_entries | cut -d'|' -f1 | grep -qxF "$key"; then
-            echo "$key|$(basename "$directory")"
+        if grep -qxF "$name" <<< "$used" || ! first_loader "$folder" >/dev/null; then
+            continue
         fi
-    done | sort -u
+
+        echo "$key|$folder"
+    done
 }
 
-known_keys() {
-    {
-        configured_entries
-        detected_entries
-    } | cut -d'|' -f1 | grep -v '^$'
+# Every operating system in the menu, in the order aarambh.efi shows them.
+menu_systems() {
+    configured_entries
+    detected_entries
 }
 
-lowercase() {
-    printf '%s' "$1" | tr 'A-Z' 'a-z'
+is_action_name() {
+    case "$(lowercase "$1")" in
+        firmware|restart|reboot|"power off"|poweroff|shutdown) return 0 ;;
+    esac
+    return 1
 }
 
+# Prints the key or index to store, or fails with the reason on stderr.
 resolve_default() {
     local wanted
+    local index
+    local count
+    local key
+    local title
 
     wanted=$(lowercase "$1")
 
     case "$1" in
         ''|*[!0-9]*) ;;
         *)
-            echo "$1"
+            index=$(printf '%s' "$1" | sed 's/^0*//')
+            index=${index:-0}
+            count=$(menu_systems | grep -c .)
+
+            if [ "${#index}" -gt 2 ] || [ "$index" -ge "$count" ]; then
+                echo "aarambh: error: there is no operating system number $1 (the menu has $count, counted from 0)" >&2
+                return 1
+            fi
+            echo "$index"
             return 0
             ;;
     esac
@@ -186,8 +319,13 @@ resolve_default() {
             echo "$key"
             return 0
         fi
-    done < <(configured_entries; detected_entries)
+    done < <(menu_systems)
 
+    if is_action_name "$1"; then
+        echo "aarambh: error: '$1' cannot be the default, only an operating system starts by itself" >&2
+    else
+        echo "aarambh: error: no operating system called '$1' is in the menu" >&2
+    fi
     return 1
 }
 
@@ -208,18 +346,30 @@ show_themes() {
 
 show_entries() {
     local default
+    local key
+    local title
+    local loader
 
     default=$(lowercase "$(config_value default)")
 
-    while IFS='|' read -r key title; do
+    while IFS='|' read -r key title loader; do
         local mark=" "
 
         if [ -n "$key" ] && [ "$(lowercase "$key")" = "$default" ]; then
             mark="*"
         fi
 
-        printf '%s %-14s %s\n' "$mark" "${key:--}" "$title"
-    done < <(configured_entries)
+        case "$loader" in
+            @*|'') printf '%s %-14s %s\n' "$mark" "${key:--}" "$title" ;;
+            *)
+                if esp_file "$loader"; then
+                    printf '%s %-14s %s\n' "$mark" "${key:--}" "$title"
+                else
+                    printf '%s %-14s %s (not in the menu: %s is missing)\n' "$mark" "${key:--}" "$title" "$loader"
+                fi
+                ;;
+        esac
+    done < <(config_entry_lines)
 
     while IFS='|' read -r key folder; do
         local mark=" "
@@ -254,7 +404,7 @@ apply_default() {
     local key
 
     if ! key=$(resolve_default "$1"); then
-        echo "aarambh: error: no entry called '$1'. Entries:" >&2
+        echo "Entries:" >&2
         show_entries >&2
         exit 1
     fi
@@ -264,12 +414,21 @@ apply_default() {
 }
 
 apply_timeout() {
+    local seconds
+
     case "$1" in
-        ''|*[!0-9]*) die "timeout must be a number of seconds" ;;
+        ''|*[!0-9]*) die "timeout must be a whole number of seconds, 0 to $TIMEOUT_MAX" ;;
     esac
 
-    set_config_value timeout "$1"
-    log "timeout set to $1 seconds"
+    seconds=$(printf '%s' "$1" | sed 's/^0*//')
+    seconds=${seconds:-0}
+
+    if [ "${#seconds}" -gt "${#TIMEOUT_MAX}" ] || [ "$seconds" -gt "$TIMEOUT_MAX" ]; then
+        die "timeout must be 0 to $TIMEOUT_MAX seconds"
+    fi
+
+    set_config_value timeout "$seconds"
+    log "timeout set to $seconds seconds"
 }
 
 for action in "${ACTIONS[@]}"; do

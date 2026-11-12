@@ -62,6 +62,31 @@ replace_file() {
     return 1
 }
 
+CONFIG_LOCK_WAIT_SECONDS=30
+
+# Runs "$@" while holding the lock every writer of aarambh.conf takes (the
+# aarambh command, setup.sh, uninstall.sh and aarambh-kernels), so each
+# read, change and replace starts from the result of the one before it.
+# Two writers otherwise both read the old file and the later rename drops the
+# other's change. Hold it only around one such change, never while calling
+# another Aarambh script.
+with_config_lock() {
+    local lock_dir="$ROOT/run/lock"
+
+    if ! has_command flock || ! mkdir -p "$lock_dir" 2>/dev/null; then
+        "$@"
+        return
+    fi
+
+    (
+        if ! flock -w "$CONFIG_LOCK_WAIT_SECONDS" 8; then
+            warn "another Aarambh command is changing aarambh.conf, try again"
+            exit 1
+        fi
+        "$@"
+    ) 8> "$lock_dir/aarambh-config.lock"
+}
+
 has_command() {
     command -v "$1" >/dev/null 2>&1
 }

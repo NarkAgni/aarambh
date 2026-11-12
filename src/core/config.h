@@ -7,6 +7,9 @@
 #define CONFIG_NAME_MAX 128
 #define CONFIG_DEFAULT_MAX 64
 
+/* The longest countdown; a larger value in aarambh.conf counts as this. */
+#define CONFIG_TIMEOUT_MAX 999
+
 typedef struct {
     int timeout_seconds;
     int default_index;

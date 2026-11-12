@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-12
+
+Safer font handling, kernel copies that survive a full EFI partition and a
+failed scan, and settings that are no longer lost when two commands run at
+once. Update with `git pull && make install`, then run `setup.sh` once on
+every other Linux.
+
+### Fixed
+
+- A font with correct checksums but a wrongly built table could still crash
+  the menu when its first text was drawn: the character map was only checked
+  for size, and glyph outlines not at all. Fonts are now checked the way
+  stb_truetype reads them: the character map it actually uses, format by
+  format; every glyph outline, so no point or flag is read past the glyph's
+  own bytes; and composite glyphs, which may not loop or nest deeper than
+  eight levels. A font that fails is not used.
+- Running out of memory while a glyph was drawn crashed the menu, after the
+  backgrounds had loaded fine. A glyph without memory is now skipped, keeps
+  its width, and is drawn once memory is back. Glyphs are drawn in strips of
+  at most 64 pixels, the width stb_truetype handles without an allocation it
+  does not check; the result is identical pixel for pixel.
+- A kernel scan that failed partway (an unreadable `/boot`, a failing `sort`,
+  unreadable GRUB menu ids, BLS folders that cannot be listed) published an
+  empty kernel list and deleted the direct-boot copy. A failed scan now fails
+  the run and leaves the last list and its copies as they were.
+- With too little room for a second kernel copy, the old copy was deleted
+  before the new kernel list was published, so a failure in between left the
+  old list pointing at missing files. A copy the published list names is now
+  never deleted first: the new kernel is listed for the OS's own loader, that
+  list is published, then the old copy goes and the new one is made in a
+  second pass.
+- A damaged kernel copy on the EFI partition was used again as long as its
+  name matched. Copies are now checked before reuse, byte for byte or by
+  their signature, and written again when damaged.
+- Two commands changing `aarambh.conf` at the same moment (for example
+  `aarambh --theme` and `aarambh --timeout`, or a kernel update) could lose
+  one change. Every writer now takes one shared lock around reading, changing
+  and replacing the file.
+- `aarambh --default` accepted a folder under `\EFI\` without a boot loader,
+  a configured system whose loader is gone, a system that `autodetect no`
+  hides, Restart and Power Off, and indexes past the last system. It now
+  accepts exactly what the menu would boot, and lists the entries otherwise.
+- A very large timeout overflowed when read at boot. Numbers in
+  `aarambh.conf` are now read safely, and the timeout is limited to 999
+  seconds, in the menu and in `aarambh --timeout`. The countdown also shows
+  three-digit numbers correctly now.
+
+### Changed
+
+- Fonts with CFF outlines (most `.otf` files) are no longer used; set
+  TrueType (`.ttf`) fonts in `aarambh.conf`. The bundled fonts are TrueType.
+- Fonts whose ascent and descent leave no line height are refused.
+- `aarambh --timeout` accepts 0 to 999 and stores the number without leading
+  zeros.
+- The first `aarambh-kernels` run of this version checks the existing kernel
+  copy; a copy made by 0.1.6 that is intact is kept.
+
+### Added
+
+- `make test` runs about 110 more checks: fonts built wrong with correct
+  checksums (including 600 rounds of random damage), memory running out at
+  every step of drawing text, failing kernel scans, low space with a failing
+  list update, damaged kernel copies, `aarambh` commands running at the same
+  time, and the limits of `--default` and `--timeout`.
+
 ## [0.1.6] - 2026-11-11
 
 A reliability release: eleven bugs found in a review of 0.1.5, all in what
@@ -266,7 +331,8 @@ First public release.
 - QEMU test runner (`make qemu THEME=... DEFAULT=...`) and automated hook tests
   (`make test`).
 
-[Unreleased]: https://github.com/NarkAgni/aarambh/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/NarkAgni/aarambh/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/NarkAgni/aarambh/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/NarkAgni/aarambh/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/NarkAgni/aarambh/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/NarkAgni/aarambh/compare/v0.1.3...v0.1.4

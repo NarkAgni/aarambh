@@ -68,7 +68,7 @@ boot_kernels() {
 }
 
 # Named kernels (Arch: linux, linux-lts) first with "linux" on top, then
-# numbered kernels newest first.
+# numbered kernels newest first. Fails when any step of the pipeline fails.
 sorted_kernels() {
     local name
     local version
@@ -102,7 +102,8 @@ find_initrd() {
 }
 
 # "<kernel file>|<normal id>|<recovery id>" for every kernel in grub.cfg, so the
-# ids match exactly what this distribution's GRUB generated.
+# ids match exactly what this distribution's GRUB generated. Fails when
+# grub.cfg exists but cannot be read.
 grub_cfg_ids() {
     local config="$ROOT$GRUB_CFG"
 
@@ -184,6 +185,7 @@ list_scanned_kernels() {
     local entry
     local recovery
     local direct
+    local names
     local first=1
 
     load_grub_defaults
@@ -204,9 +206,12 @@ list_scanned_kernels() {
         echo "@oneshot none"
     fi
 
-    GRUB_IDS=$(grub_cfg_ids)
+    # A failed scan must fail the run: a header with no kernels is a valid
+    # list, and publishing it would drop every kernel and its direct-boot copy.
+    GRUB_IDS=$(grub_cfg_ids) || return 1
+    names=$(sorted_kernels) || return 1
 
-    for name in $(sorted_kernels); do
+    for name in $names; do
         version=$(kernel_name "$name")
         kernel="$ROOT/boot/$name"
         initrd=$(find_initrd "$version" "$(grub_version "$name")" || true)

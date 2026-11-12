@@ -15,10 +15,84 @@ the firmware logo and the login screen.
 - **Your current boot loader is kept.** GRUB or systemd-boot stays installed
   as the fallback, and one command removes Aarambh again.
 
+## Themes
+
+13 built-in themes. Switch with `aarambh --theme <name>`; each has a matching
+boot, restart and shutdown splash.
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/accordion.jpg" alt="Accordion theme"><br>
+<b>Accordion</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/cinema.jpg" alt="Cinema theme"><br>
+<b>Cinema</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/hud.jpg" alt="HUD theme"><br>
+<b>HUD</b>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/glass-sidebar.jpg" alt="Glass Sidebar theme"><br>
+<b>Glass Sidebar</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/editorial-dark.jpg" alt="Editorial Dark theme"><br>
+<b>Editorial Dark</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/editorial.jpg" alt="Editorial theme"><br>
+<b>Editorial</b>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/honeycomb.jpg" alt="Honeycomb theme"><br>
+<b>Honeycomb</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/constellation.jpg" alt="Constellation theme"><br>
+<b>Constellation</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/picker-wheel.jpg" alt="Picker Wheel theme"><br>
+<b>Picker Wheel</b>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/dial.jpg" alt="Dial theme"><br>
+<b>Dial</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/minimal.jpg" alt="Minimal theme"><br>
+<b>Minimal</b>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/departures.jpg" alt="Departures theme"><br>
+<b>Departures</b>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/gallery.jpg" alt="Gallery theme"><br>
+<b>Gallery</b>
+</td>
+</tr>
+</table>
+
+Each theme with a larger screenshot and its keys is listed under **Themes**
+in [Using Aarambh](#using-aarambh).
+
 **On this page**
 
 | I want to...                         | Go to |
 |--------------------------------------|-------|
+| See every theme                      | [Themes](#themes) |
 | Install Aarambh                      | [Install](#install), 6 steps |
 | Change theme, default OS or timeout  | [Everyday use](#everyday-use) |
 | Update to a new version              | [Update](#update) |
@@ -192,7 +266,7 @@ aarambh --theme cinema        # switch theme
 aarambh --list                # list the menu entries, * marks the default
 aarambh --default fedora      # start Fedora by default
 aarambh --timeout 3           # 3 second countdown
-aarambh --timeout 0           # no countdown: the menu waits for a key
+aarambh --timeout 0           # no countdown: the menu waits for a key (0 to 999 seconds)
 ```
 
 The countdown only ever starts an operating system. With Restart, Power Off or
@@ -270,81 +344,6 @@ Messages the menu itself can show:
 | Blocked by Secure Boot                 | That kernel or loader is not signed with a trusted key. Run `setup.sh` on that OS. |
 | Could not save the kernel choice, nothing was started | The kernel you picked under *Advanced options* could not be handed to the OS's boot loader (EFI partition full or read-only). Nothing was started, so no other kernel booted in its place. |
 | No bootable system found               | No boot loader was found on the EFI partition. The menu waits; it does not restart by itself. Start your OS from the firmware boot menu and run `aarambh-debug`. |
-
----
-
-## Themes
-
-13 built-in themes. Switch with `aarambh --theme <name>`; each has a matching
-boot, restart and shutdown splash.
-
-<table>
-<tr>
-<td align="center" width="33%">
-<img src="docs/screenshots/accordion.jpg" alt="Accordion theme"><br>
-<b>Accordion</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/cinema.jpg" alt="Cinema theme"><br>
-<b>Cinema</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/hud.jpg" alt="HUD theme"><br>
-<b>HUD</b>
-</td>
-</tr>
-<tr>
-<td align="center" width="33%">
-<img src="docs/screenshots/glass-sidebar.jpg" alt="Glass Sidebar theme"><br>
-<b>Glass Sidebar</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/editorial-dark.jpg" alt="Editorial Dark theme"><br>
-<b>Editorial Dark</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/editorial.jpg" alt="Editorial theme"><br>
-<b>Editorial</b>
-</td>
-</tr>
-<tr>
-<td align="center" width="33%">
-<img src="docs/screenshots/honeycomb.jpg" alt="Honeycomb theme"><br>
-<b>Honeycomb</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/constellation.jpg" alt="Constellation theme"><br>
-<b>Constellation</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/picker-wheel.jpg" alt="Picker Wheel theme"><br>
-<b>Picker Wheel</b>
-</td>
-</tr>
-<tr>
-<td align="center" width="33%">
-<img src="docs/screenshots/dial.jpg" alt="Dial theme"><br>
-<b>Dial</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/minimal.jpg" alt="Minimal theme"><br>
-<b>Minimal</b>
-</td>
-<td align="center" width="33%">
-<img src="docs/screenshots/departures.jpg" alt="Departures theme"><br>
-<b>Departures</b>
-</td>
-</tr>
-<tr>
-<td align="center" width="33%">
-<img src="docs/screenshots/gallery.jpg" alt="Gallery theme"><br>
-<b>Gallery</b>
-</td>
-</tr>
-</table>
-
-Each theme with a larger screenshot and its keys is listed under **Themes**
-in [Using Aarambh](#using-aarambh).
 
 ---
 
@@ -721,7 +720,11 @@ and errors go to the system log; read them with `journalctl -t aarambh`.
 Kernel updates need no action from you.
 
 Two triggers that fire at the same time wait for each other, so the kernel
-list and the kernel copy are only ever written by one of them.
+list and the kernel copy are only ever written by one of them. Every command
+that changes `aarambh.conf` (`aarambh`, `setup.sh`, `uninstall.sh` and the
+clock update in `aarambh-kernels`) takes the same lock,
+`/run/lock/aarambh-config.lock`, so two changes made at the same moment are
+both kept.
 
 Without systemd the one-time choice is still reset: Aarambh empties
 `next-<os>.cfg` on the next boot it starts with the default kernel.
@@ -783,8 +786,11 @@ systemd-boot systems: `loader.conf` is not changed. Aarambh sets
 
 Nothing is written outside `\EFI\aarambh\`. The direct-boot copy is the
 largest item. Before copying, `aarambh-kernels` checks that at least 8 MB of
-the ESP stays free. If the kernel does not fit, it prints a warning and that
-OS boots through its own loader instead. Systems whose kernels already live
+the ESP stays free. When the new pair only fits once the old one is gone, it
+first publishes a list that starts the new kernel through the OS's own
+loader, then deletes the old pair, then copies the new one and publishes the
+list again. If the kernel does not fit even then, it prints a warning and
+that OS keeps booting through its own loader. Systems whose kernels already live
 on the ESP (systemd-boot, ESP mounted at `/boot`) need no copy at all.
 
 The kernel and its initramfs are copied as a pair with the same `<n>` in
@@ -793,7 +799,13 @@ their names (12 characters made from the content of both files), and
 written next to the old one, the list is replaced in one step, and only then
 is the old pair deleted. An update that is interrupted or fails halfway
 therefore never leaves a kernel paired with the initramfs of another one, and
-never leaves a half-written list: the menu keeps the last complete one.
+never leaves a half-written list: the menu keeps the last complete one, and
+every file that list names. A kernel scan that fails partway (an unreadable
+`/boot`, a failing helper) is an error too, never an empty list.
+
+Before a copy is used again it is checked: the initramfs and an unsigned
+kernel byte for byte against the source, a signed kernel by its signature
+with this OS's key. A copy that was damaged on the ESP is written again.
 
 </details>
 
@@ -1044,12 +1056,12 @@ entry Firmware  | @firmware               | logos/settings.png | backgrounds/set
 | Key            | Meaning                                               |
 |----------------|-------------------------------------------------------|
 | `theme`        | Theme name, see **Themes** below                      |
-| `timeout`      | Seconds before the default entry starts, `0` disables the countdown (the menu then waits for a key; it does not boot at once). Only an operating system is started by the countdown, never Restart, Power Off or Firmware |
+| `timeout`      | Seconds before the default entry starts, `0` to `999`; a larger number counts as `999` and anything that is not a number keeps the default of `10`. `0` disables the countdown (the menu then waits for a key; it does not boot at once). Only an operating system is started by the countdown, never Restart, Power Off or Firmware |
 | `default`      | Default entry: OS id (`ubuntu`, `fedora`, `windows`), menu title, or index starting at 0 |
 | `autodetect`   | `yes` adds loaders found under `\EFI\` (Windows, other OSes) |
 | `edit`         | `yes` (default) lets E edit boot options, `no` turns it off |
 | `write_combining` | `yes` (default) maps the screen write-combining for smooth animation, `no` keeps the firmware's slower path (see **Smooth animation** under *Safety and recovery*) |
-| `font_light`, `font_regular`, `font_bold`, `font_mono` | TTF paths. A font file that is missing or damaged (cut short, wrong checksum) is not used; its text is drawn with one of the other fonts |
+| `font_light`, `font_regular`, `font_bold`, `font_mono` | Paths of TrueType fonts (`.ttf`). A font that is missing, damaged or built wrong (cut short, wrong checksum, tables that point outside the file, composite glyphs that loop) is not used; its text is drawn with one of the other fonts. Fonts with CFF outlines (most `.otf` files) are not supported |
 | `utc_offset`   | Written by the hooks, e.g. `+0530`                    |
 | `entry`        | `title \| loader \| logo \| background \| key \| accent` |
 
@@ -1124,8 +1136,16 @@ aarambh                               # show theme, default and timeout
 ```
 
 `--default` takes the OS id (the `ID=` from `/etc/os-release`), the menu
-title, or an index. An id or title keeps pointing at the same OS when a new
-installation adds an entry and the order changes; an index does not.
+title, or an index counted from 0. An id or title keeps pointing at the same
+OS when a new installation adds an entry and the order changes; an index does
+not.
+
+Only an operating system that is really in the menu can be the default: one
+whose boot loader exists on the EFI partition (a folder under `\EFI\` with no
+loader Aarambh recognizes is not), and with `autodetect no` only the entries
+in `aarambh.conf`. Restart, Power Off and Firmware cannot be the default. The
+command refuses anything else and lists the entries, so it never reports a
+change that the menu would ignore.
 
 </details>
 
@@ -1556,7 +1576,7 @@ sudo bash /boot/efi/EFI/aarambh/hooks/setup.sh --loader '\EFI\MyLinux\grubx64.ef
 <br>
 
 **Cause:** the newest kernel and initramfs do not fit on the ESP with 8 MB to
-spare.
+spare, even after the old copy was deleted.
 
 **Effect:** nothing breaks. That OS boots through its own loader instead.
 

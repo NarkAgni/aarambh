@@ -43,7 +43,7 @@ static void build_status(float now)
     }
 
     str_copy(app.status, "Starting in ", sizeof(app.status));
-    str_append_int(app.status, seconds_left % 100, sizeof(app.status));
+    str_append_int(app.status, seconds_left, sizeof(app.status));
 }
 
 static void build_frame(ThemeFrame *frame, float now)

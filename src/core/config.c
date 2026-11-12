@@ -40,7 +40,7 @@ static char *split_key_value(char *line)
 static void apply_setting(Config *config, EntryList *entries, const char *key, char *value)
 {
     if (str_equal(key, "timeout")) {
-        config->timeout_seconds = str_to_int(value);
+        str_parse_count(value, CONFIG_TIMEOUT_MAX, &config->timeout_seconds);
     } else if (str_equal(key, "default")) {
         str_copy(config->default_entry, value, sizeof(config->default_entry));
     } else if (str_equal(key, "utc_offset")) {
@@ -66,22 +66,6 @@ static void apply_setting(Config *config, EntryList *entries, const char *key, c
     }
 }
 
-static int is_number(const char *text)
-{
-    if (*text == '\0') {
-        return 0;
-    }
-
-    while (*text != '\0') {
-        if (*text < '0' || *text > '9') {
-            return 0;
-        }
-        text++;
-    }
-
-    return 1;
-}
-
 static int same_name(const char *left, const char *right)
 {
     return str_length(left) == str_length(right) && str_starts_with_nocase(left, right);
@@ -90,13 +74,15 @@ static int same_name(const char *left, const char *right)
 /*
  * "default" is an index, an entry key (ubuntu, fedora, windows) or a title.
  * Names are matched after autodetect, so they survive any change of order.
+ * An index past the last entry is left to nav_init, which starts at 0.
  */
 static int find_default(const EntryList *entries, const char *name)
 {
+    int index;
     int i;
 
-    if (is_number(name)) {
-        return str_to_int(name);
+    if (str_parse_count(name, AARAMBH_MAX_ENTRIES, &index)) {
+        return index;
     }
 
     for (i = 0; i < entries->count; i++) {

@@ -7,6 +7,13 @@
 # comes from the content of both files and the signing key. The kernel list
 # names the pair it boots, so a kernel is never started with the initramfs of
 # another one, even when an update is interrupted halfway.
+#
+# A copy the published kernel list names is never deleted before a new list
+# replaces it. When the EFI partition has no room for a second pair and
+# RECLAIM_MARKER names a file, the kernel is listed without direct boot for
+# now and the marker asks aarambh-kernels for a second pass: once that list
+# is published the old pair is no longer named, is deleted, and the second
+# pass has the room.
 
 ESP_SPACE_MARGIN=$((8 * 1024 * 1024))
 
@@ -75,19 +82,58 @@ boots_in_place() {
     ! signing_enabled || has_signature "$1"
 }
 
-remove_other_generations() {
-    local keep=$1
+is_listed() {
+    grep -qsF -- "\\$(basename "$1")|" "$KERNEL_LIST"
+}
+
+# Deletes the files under linux/<key>/ that the published kernel list does not
+# boot: older pairs and whatever an interrupted run left behind.
+remove_unlisted_copies() {
     local file
 
     for file in "$LINUX_DIR"/*; do
-        case "$(basename "$file")" in
-            "vmlinuz-$keep"|"initrd-$keep.img") ;;
-            *) rm -f "$file" ;;
-        esac
+        if [ -e "$file" ] && ! is_listed "$file"; then
+            rm -f "$file"
+        fi
     done
 }
 
-# Both files reach their final names only after a complete copy.
+has_listed_copies() {
+    local file
+
+    for file in "$LINUX_DIR"/*; do
+        if [ -e "$file" ] && is_listed "$file"; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# The pair on the ESP still holds what was written for this generation: the
+# initramfs byte for byte, and the kernel byte for byte or, when signed, with
+# a valid signature of this key over its content. A damaged copy is written
+# again instead of being trusted for its name.
+generation_is_intact() {
+    local kernel=$1
+    local initrd=$2
+    local kernel_copy=$3
+    local initrd_copy=$4
+
+    if [ ! -s "$kernel_copy" ] || ! cmp -s "$initrd" "$initrd_copy"; then
+        return 1
+    fi
+
+    if signing_enabled; then
+        signed_by_us "$kernel_copy"
+    else
+        cmp -s "$kernel" "$kernel_copy"
+    fi
+}
+
+# Both files reach their final names only after a complete copy. On failure
+# only the unfinished .new files are removed: the final names may be in the
+# published kernel list.
 write_generation() {
     local kernel=$1
     local initrd=$2
@@ -99,8 +145,18 @@ write_generation() {
         return 0
     fi
 
-    rm -f "$kernel_copy.new" "$initrd_copy.new" "$kernel_copy" "$initrd_copy"
+    rm -f "$kernel_copy.new" "$initrd_copy.new"
     return 1
+}
+
+# Asks aarambh-kernels for a second pass after the old pair is released.
+# Fails when there is no marker or no listed pair whose release would help.
+reclaim_later() {
+    if [ -z "${RECLAIM_MARKER:-}" ] || ! has_listed_copies; then
+        return 1
+    fi
+
+    echo yes > "$RECLAIM_MARKER"
 }
 
 publish_generation() {
@@ -119,15 +175,17 @@ publish_generation() {
     kernel_copy="$LINUX_DIR/vmlinuz-$id"
     initrd_copy="$LINUX_DIR/initrd-$id.img"
 
-    if [ ! -s "$kernel_copy" ] || ! cmp -s "$initrd" "$initrd_copy"; then
+    if ! generation_is_intact "$kernel" "$initrd" "$kernel_copy" "$initrd_copy"; then
         needed=$(( $(file_size "$kernel") + $(file_size "$initrd") ))
 
         if ! has_room_for "$needed"; then
-            remove_other_generations "$id"
+            remove_unlisted_copies
         fi
 
         if ! has_room_for "$needed"; then
-            disable_direct_boot "not enough space on the EFI partition"
+            if ! reclaim_later; then
+                disable_direct_boot "not enough space on the EFI partition"
+            fi
             return 1
         fi
 
@@ -180,21 +238,13 @@ copy_for_direct_boot() {
     return "$status"
 }
 
-# Remove every kernel copy the published kernel list does not boot: older
-# generations and whatever an interrupted update left behind.
+# Called after a new kernel list is published: its unlisted copies go.
 prune_direct_boot() {
-    local file
-
     if [ ! -d "$LINUX_DIR" ]; then
         return 0
     fi
 
-    for file in "$LINUX_DIR"/*; do
-        if [ -e "$file" ] && ! grep -qsF -- "\\$(basename "$file")|" "$KERNEL_LIST"; then
-            rm -f "$file"
-        fi
-    done
-
+    remove_unlisted_copies
     rmdir "$LINUX_DIR" 2>/dev/null || true
 }
 

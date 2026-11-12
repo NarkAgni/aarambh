@@ -111,6 +111,9 @@ int str_fits(const char *text, mem_size_t capacity)
     return str_length(text) < capacity;
 }
 
+#define INT_LIMIT 2147483647
+
+/* Leading digits, saturated at the largest int instead of overflowing. */
 int str_to_int(const char *text)
 {
     int value = 0;
@@ -122,7 +125,13 @@ int str_to_int(const char *text)
     }
 
     while (is_digit(*text)) {
-        value = value * 10 + (*text - '0');
+        int digit = *text - '0';
+
+        if (value > (INT_LIMIT - digit) / 10) {
+            value = INT_LIMIT;
+        } else {
+            value = value * 10 + digit;
+        }
         text++;
     }
 
@@ -130,6 +139,33 @@ int str_to_int(const char *text)
         return -value;
     }
     return value;
+}
+
+/*
+ * 1 when `text` is only decimal digits; the value, capped at `max`, goes to
+ * `value`. Any number of digits is safe: the cap is applied while reading.
+ */
+int str_parse_count(const char *text, int max, int *value)
+{
+    int result = 0;
+
+    if (!is_digit(*text)) {
+        return 0;
+    }
+
+    while (is_digit(*text)) {
+        if (result <= max) {
+            result = result * 10 + (*text - '0');
+        }
+        text++;
+    }
+
+    if (*text != '\0') {
+        return 0;
+    }
+
+    *value = result > max ? max : result;
+    return 1;
 }
 
 char *str_trim(char *text)

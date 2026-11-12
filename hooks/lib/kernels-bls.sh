@@ -94,11 +94,14 @@ belongs_to_this_os() {
 }
 
 entries_by_version() {
+    local dirs
     local dir
     local file
     local version
 
-    for dir in $(bls_entry_dirs); do
+    dirs=$(bls_entry_dirs) || return 1
+
+    for dir in $dirs; do
         for file in "$dir"/*.conf; do
             if [ -f "$file" ] && belongs_to_this_os "$file"; then
                 version=$(bls_field version "$file")
@@ -265,10 +268,15 @@ bls_direct_fields() {
     fi
 }
 
+# Fails when the boot entries cannot be listed: a header with no kernels is a
+# valid list, and publishing it would drop every kernel and its copy.
 list_bls_kernels() {
+    local entries
     local version
     local entry
     local first=1
+
+    entries=$(entries_by_version) || return 1
 
     if [ "$BOOTLOADER" = systemd-boot ]; then
         echo "@oneshot systemd-boot"
@@ -276,11 +284,15 @@ list_bls_kernels() {
         echo "@oneshot grub"
     fi
 
-    entries_by_version | while IFS='|' read -r version entry; do
+    while IFS='|' read -r version entry; do
+        if [ -z "$entry" ]; then
+            continue
+        fi
+
         echo "$(bls_title "$entry" "$version")|$(bls_id "$entry")$(bls_direct_fields "$entry" "$version" "$first")"
 
         if [[ "$version" != *rescue* ]] && bls_file "$entry" "$(bls_field linux "$entry")" >/dev/null; then
             first=0
         fi
-    done
+    done <<< "$entries"
 }
