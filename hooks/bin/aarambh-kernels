@@ -2,10 +2,15 @@
 #
 # Regenerate <key>.kernels on the ESP and keep the direct-boot copy current.
 # Called by the GRUB, kernel-install, initramfs and package manager hooks.
+#
+# The list is written next to the old one and replaces it in one rename, only
+# when it was generated completely. A failed run exits with 1 and leaves the
+# list of the last good run in place, so the menu keeps working.
 
 set -uo pipefail
 
 LIB_DIR="${AARAMBH_LIB_DIR:-/usr/local/lib/aarambh}"
+LOCK_WAIT_SECONDS=120
 
 # shellcheck source=../lib/common.sh
 . "$LIB_DIR/common.sh"
@@ -25,21 +30,75 @@ LINUX_DIR="$ESP_DIR/linux/$KEY"
 EFI_LINUX_DIR="\\EFI\\aarambh\\linux\\$KEY"
 CONFIG_FILE="$ESP_DIR/aarambh.conf"
 
-update_utc_offset() {
-    if [ -f "$CONFIG_FILE" ]; then
-        sed -i '/^utc_offset/d' "$CONFIG_FILE"
-        echo "utc_offset $(date +%z)" >> "$CONFIG_FILE"
-    fi
-}
-
-update_utc_offset
-
 if [ "$BLS" = yes ]; then
     # shellcheck source=../lib/kernels-bls.sh
     . "$LIB_DIR/kernels-bls.sh"
-    list_bls_kernels > "$KERNEL_LIST"
 else
     # shellcheck source=../lib/kernels-scan.sh
     . "$LIB_DIR/kernels-scan.sh"
-    list_scanned_kernels > "$KERNEL_LIST"
 fi
+
+# Two package hooks can fire at once; only one may write the list and the
+# kernel copy at a time.
+lock_esp() {
+    if ! has_command flock; then
+        return 0
+    fi
+
+    exec 9< "$ESP_DIR" && flock -w "$LOCK_WAIT_SECONDS" 9
+}
+
+update_utc_offset() {
+    local line
+
+    line="utc_offset $(date +%z)"
+
+    if [ ! -f "$CONFIG_FILE" ] || grep -qxF "$line" "$CONFIG_FILE"; then
+        return 0
+    fi
+
+    { grep -v '^utc_offset' "$CONFIG_FILE"; echo "$line"; } | replace_file "$CONFIG_FILE" \
+        || warn "could not update utc_offset in $CONFIG_FILE"
+}
+
+generate_list() {
+    if [ "$BLS" = yes ]; then
+        list_bls_kernels
+    else
+        list_scanned_kernels
+    fi
+}
+
+# The @oneshot line first, then only lines with a title and a kernel id.
+is_complete_list() {
+    awk -F'|' '
+        NR == 1 { if ($0 !~ /^@oneshot (grub|systemd-boot|none)$/) exit 1; next }
+        NF < 2 || $1 == "" || $2 == "" { exit 1 }
+    ' "$1"
+}
+
+publish_list() {
+    local scratch
+
+    scratch=$(mktemp "$KERNEL_LIST.XXXXXX") || return 1
+
+    if generate_list > "$scratch" && is_complete_list "$scratch" && mv -f "$scratch" "$KERNEL_LIST"; then
+        sync
+        return 0
+    fi
+
+    rm -f "$scratch"
+    return 1
+}
+
+if ! lock_esp; then
+    die "another aarambh-kernels is still running, the kernel list was not refreshed"
+fi
+
+update_utc_offset
+
+if ! publish_list; then
+    die "the kernel list could not be generated, $KERNEL_LIST was left as it was"
+fi
+
+prune_direct_boot

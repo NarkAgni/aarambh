@@ -154,7 +154,8 @@ refresh_kernel_list() {
         return 0
     fi
 
-    AARAMBH_LIB_DIR="$ROOT$LIB_DIR" bash "$ROOT$BIN_DIR/aarambh-kernels"
+    AARAMBH_LIB_DIR="$ROOT$LIB_DIR" bash "$ROOT$BIN_DIR/aarambh-kernels" \
+        || warn "the kernel list was not refreshed; $OS_NAME starts through its own boot loader until 'sudo aarambh-kernels' works"
 }
 
 print_summary() {

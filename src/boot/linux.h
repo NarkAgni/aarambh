@@ -7,6 +7,9 @@
 
 int linux_can_boot_direct(const Kernel *kernel);
 
+/* 1 when an initrd list has few and short enough paths to be loaded whole. */
+int linux_initrd_list_fits(const char *list);
+
 /*
  * `cmdline` replaces the kernel's own command line when it is not NULL.
  * `overlay` is appended after the kernel's initrd; it may be empty.

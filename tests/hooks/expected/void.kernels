@@ -1,2 +1,2 @@
 @oneshot none
-Linux 6.6.58_1|vmlinuz-6.6.58_1|\EFI\aarambh\linux\void\vmlinuz|\EFI\aarambh\linux\void\initrd.img|root=UUID=5555 ro quiet
+Linux 6.6.58_1|vmlinuz-6.6.58_1|\EFI\aarambh\linux\void\vmlinuz-<id>|\EFI\aarambh\linux\void\initrd-<id>.img|root=UUID=5555 ro quiet

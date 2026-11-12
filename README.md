@@ -1,37 +1,277 @@
 # Aarambh
 
-**Aarambh** (आरम्भ, "the beginning") is a graphical UEFI boot menu for Linux.
+**Aarambh** (आरम्भ, "the beginning") is a graphical boot menu for Linux PCs.
 It replaces the GRUB or systemd-boot menu with animated, full-screen panels and
-hands over to a matching Plymouth splash, so the screen never goes black
-between the firmware logo and the login screen.
-
-It works with any Linux distribution that boots in UEFI mode, and with several
-of them installed side by side. Windows and other EFI loaders on the same disk
-are found automatically.
-
-> [!IMPORTANT]
-> **Supported hardware: 64-bit x86 PCs (`x86_64`, Intel or AMD) with 64-bit
-> UEFI firmware. Secure Boot can stay on.**
->
-> Not supported: ARM (`aarch64`, Raspberry Pi, Apple Silicon, Snapdragon
-> laptops), 32-bit PCs (`i686`), 32-bit UEFI firmware (some Atom tablets),
-> RISC-V, and legacy BIOS / CSM mode. The installer checks this and stops
-> before changing anything.
->
-> Check your machine:
->
-> ```sh
-> uname -m                                  # must print x86_64
-> cat /sys/firmware/efi/fw_platform_size    # must print 64 (missing = BIOS mode)
-> ```
-
-Aarambh runs before any operating system starts. Every section below can be
-expanded, so you can see exactly what it does to your machine before you
-install it.
+hands over to a matching boot splash, so the screen never goes black between
+the firmware logo and the login screen.
 
 <p align="center">
 <img src="docs/screenshots/accordion.jpg" alt="Aarambh with the Accordion theme" width="900">
 </p>
+
+- Works with any Linux distribution that boots in UEFI mode, with several of
+  them side by side, and finds Windows on its own.
+- 13 themes, switched with one command.
+- **Your current boot loader is kept.** GRUB or systemd-boot stays installed
+  as the fallback, and one command removes Aarambh again.
+
+**On this page**
+
+| I want to...                         | Go to |
+|--------------------------------------|-------|
+| Install Aarambh                      | [Install](#install), 6 steps |
+| Change theme, default OS or timeout  | [Everyday use](#everyday-use) |
+| Update to a new version              | [Update](#update) |
+| Remove it                            | [Uninstall](#uninstall) |
+| Get back into my system              | [If something goes wrong](#if-something-goes-wrong) |
+| Know exactly what it changes         | [Reference](#reference) |
+
+---
+
+## Install
+
+Do the steps in order. Every command is typed in a terminal, on the Linux you
+use every day. The whole thing takes about five minutes.
+
+### Step 1: Check that your PC is supported
+
+```sh
+uname -m                                  # must print: x86_64
+cat /sys/firmware/efi/fw_platform_size    # must print: 64
+```
+
+| Result                                   | Meaning |
+|------------------------------------------|---------|
+| `x86_64` and `64`                        | Supported. Go to step 2. |
+| `aarch64`, `i686`, `riscv64`             | Not supported (ARM, Raspberry Pi, Apple Silicon, 32-bit PCs, RISC-V). |
+| The second command says *No such file*   | The PC booted in legacy BIOS / CSM mode. Not supported. |
+| `x86_64` and `32`                        | 32-bit UEFI firmware (some Atom tablets). Not supported. |
+
+Secure Boot can stay **on**. The installer checks all of this again and stops
+before it changes anything.
+
+### Step 2: Install the tools needed to build it
+
+Run the **one** line for your distribution:
+
+| Distribution                         | Command |
+|--------------------------------------|---------|
+| Ubuntu, Debian, Linux Mint, Pop!_OS, Zorin, Kali | `sudo apt install git build-essential gnu-efi curl efibootmgr` |
+| Fedora, RHEL, Rocky, CentOS Stream   | `sudo dnf install git gcc make gnu-efi-devel curl efibootmgr` |
+| openSUSE                             | `sudo zypper install git gcc make gnu-efi curl efibootmgr` |
+| Arch, Manjaro, EndeavourOS, CachyOS  | `sudo pacman -S --needed git base-devel gnu-efi curl efibootmgr` |
+
+Nothing else is needed. With Secure Boot on, the installer adds the signing
+tools itself.
+
+### Step 3: Download and install
+
+```sh
+git clone https://github.com/NarkAgni/aarambh.git
+cd aarambh
+make install
+```
+
+It asks for your password once (`sudo`), because it writes to the EFI
+partition. When it has worked, the last lines look like this:
+
+```
+aarambh: done: Ubuntu is connected to Aarambh
+    Linux 6.8.0-45-generic   [direct boot]
+    Linux 6.8.0-45-generic (recovery)
+    Linux 6.8.0-40-generic
+aarambh: EFI partition free: 412M
+aarambh: change theme or default OS with: aarambh --theme <n> --default <os>
+aarambh: if anything goes wrong, run aarambh-debug and attach the report to an issue
+aarambh: installed to /boot/efi/EFI/aarambh
+```
+
+<details>
+<summary>Optional: see every change first, or pick a theme while installing</summary>
+
+<br>
+
+```sh
+./scripts/install.sh --dry-run            # print every change, change nothing
+make themes                               # list the 13 themes
+make install THEME=cinema DEFAULT=fedora  # install with a theme and a default OS
+make qemu THEME=hud                       # try a theme in a virtual machine first
+```
+
+`make qemu` needs the extra packages in the *Requirements* table under
+[Development](#development).
+
+</details>
+
+If it stops with an error instead, look the message up under
+[Troubleshooting](#troubleshooting). Nothing is half installed: run
+`make install` again after the fix.
+
+### Step 4: Secure Boot only: note the 8-digit password
+
+Look at the end of the installer's output.
+
+- **No password is shown:** nothing to do. Go to step 5.
+- **These lines are shown:** write the 8 digits down, you need them once in
+  step 5.
+
+  ```
+  aarambh: Secure Boot: one step is left, only once, at the next restart.
+  aarambh:   A blue 'Perform MOK management' screen appears. Choose:
+  aarambh:   Enroll MOK -> Continue -> Yes, type the password: 48213907 -> Reboot
+  ```
+
+  Forgot it? `sudo aarambh-sign --password` shows it again.
+
+### Step 5: Restart
+
+```sh
+sudo reboot
+```
+
+| What you see                          | What to do |
+|---------------------------------------|------------|
+| The Aarambh menu                      | Done. Press **Enter** to start, or wait for the countdown. |
+| A blue **Perform MOK management** screen (only if step 4 showed a password) | Press a key, then choose **Enroll MOK → Continue → Yes**, type the 8 digits, choose **Reboot**. The Aarambh menu comes next. Every screen is shown in [docs/SECURE_BOOT.md](docs/SECURE_BOOT.md). |
+| Your old boot menu, or straight into Linux | Aarambh was not started. Nothing is broken. See [If something goes wrong](#if-something-goes-wrong). |
+| A black screen for more than a minute | See [If something goes wrong](#if-something-goes-wrong). |
+
+Missed the blue screen? Nothing breaks: the PC starts your OS as before and
+the blue screen comes back at the next restart.
+
+### Step 6: Connect your other Linux systems (skip with only one Linux)
+
+Windows needs nothing: it is already in the menu.
+
+Every **other Linux** on the same disk is in the menu too, but it only gets
+its kernel list, direct boot and matching splash after you connect it. Pick it
+in the Aarambh menu, log in, and run this once:
+
+```sh
+sudo bash /boot/efi/EFI/aarambh/hooks/setup.sh
+```
+
+If it says *No such file or directory*, that OS mounts the EFI partition
+somewhere else. Find it and use that path instead:
+
+```sh
+findmnt -t vfat          # prints /boot/efi, /efi or /boot
+sudo bash /efi/EFI/aarambh/hooks/setup.sh
+```
+
+That is all. Kernel updates are picked up automatically from now on.
+
+---
+
+## Everyday use
+
+### Keys in the menu
+
+| Key                 | Action                                  |
+|---------------------|-----------------------------------------|
+| Left / Right        | Switch operating system                 |
+| Enter               | Start it                                |
+| Down, then Enter    | Advanced options: older kernels, recovery mode |
+| Esc                 | Go back                                 |
+| E                   | Edit the boot options for one boot      |
+| Any key             | Stops the countdown                     |
+
+Some themes list the systems vertically; then Up / Down switch and Right opens
+the kernel list. The keys that work are always shown at the bottom of the
+screen.
+
+### Change theme, default OS or countdown
+
+Run these from any connected Linux, as your normal user (it asks for the
+password itself). The change applies from the next boot, for every OS.
+
+```sh
+aarambh                       # show the current settings
+aarambh --themes              # list the themes, * marks the current one
+aarambh --theme cinema        # switch theme
+aarambh --list                # list the menu entries, * marks the default
+aarambh --default fedora      # start Fedora by default
+aarambh --timeout 3           # 3 second countdown
+aarambh --timeout 0           # no countdown: the menu waits for a key
+```
+
+The countdown only ever starts an operating system. With Restart, Power Off or
+Firmware selected, the menu waits for you.
+
+**Want a faster boot?** The default countdown is 10 seconds.
+`aarambh --timeout 2` saves 8 of them and still leaves time to press a key.
+
+---
+
+## Update
+
+```sh
+cd aarambh
+git pull
+make install
+```
+
+Then run the `setup.sh` line from [step 6](#step-6-connect-your-other-linux-systems-skip-with-only-one-linux)
+once on every other Linux, so its part is updated too. Your settings and menu
+entries are kept. Windows needs nothing.
+
+## Uninstall
+
+On each Linux that was connected, except the last one:
+
+```sh
+sudo bash /boot/efi/EFI/aarambh/hooks/uninstall.sh
+```
+
+On the last one, add `--purge`. It also deletes Aarambh from the EFI partition
+and removes its firmware boot entry:
+
+```sh
+sudo bash /boot/efi/EFI/aarambh/hooks/uninstall.sh --purge
+```
+
+Every file Aarambh changed is restored from its backup, and the PC boots the
+way it did before. Add `--dry-run` to either command to see what it would do.
+
+## If something goes wrong
+
+Your old boot loader is never removed, so there is always a way in.
+
+**1. Get back into Linux.**
+
+- Black screen? Wait a minute first. With an encrypted disk it may be the
+  password prompt: type the password and press **Enter**.
+- Otherwise switch the PC off (hold the power button), switch it on and open
+  the **firmware boot menu**: tap **F12** (often **F8**, **F11** or **Esc**,
+  depending on the brand) right after power on.
+- Choose your distribution's own entry: `ubuntu`, `fedora`, `GRUB`,
+  `Linux Boot Manager`. It boots exactly as it did before Aarambh.
+
+**2. Find out what happened.**
+
+```sh
+aarambh-debug       # or, in the source folder: make debug
+```
+
+It changes nothing and writes `~/aarambh-debug-<date>.txt`. The first lines
+are a summary; every line marked `[PROBLEM]` says what is wrong and how to fix
+it.
+
+**3. Fix it, or ask.** Look the message up under
+[Troubleshooting](#troubleshooting). If that does not help, attach the report
+to a [new issue](https://github.com/NarkAgni/aarambh/issues/new). To go back
+to the old boot completely, see [Uninstall](#uninstall).
+
+Messages the menu itself can show:
+
+| Message in the menu                    | Meaning |
+|----------------------------------------|---------|
+| Could not start this system            | The loader of that entry failed. You are back in the menu; pick another entry. |
+| Blocked by Secure Boot                 | That kernel or loader is not signed with a trusted key. Run `setup.sh` on that OS. |
+| Could not save the kernel choice, nothing was started | The kernel you picked under *Advanced options* could not be handed to the OS's boot loader (EFI partition full or read-only). Nothing was started, so no other kernel booted in its place. |
+| No bootable system found               | No boot loader was found on the EFI partition. The menu waits; it does not restart by itself. Start your OS from the firmware boot menu and run `aarambh-debug`. |
+
+---
 
 ## Themes
 
@@ -103,90 +343,15 @@ boot, restart and shutdown splash.
 </tr>
 </table>
 
-## Quick start
-
-Install the build tools for your distribution:
-
-```sh
-sudo apt install build-essential gnu-efi curl efibootmgr         # Debian, Ubuntu, Mint, Pop!_OS
-sudo dnf install gcc make gnu-efi-devel curl efibootmgr          # Fedora, RHEL, Rocky, CentOS
-sudo zypper install gcc make gnu-efi curl efibootmgr             # openSUSE
-sudo pacman -S --needed base-devel gnu-efi curl efibootmgr       # Arch, Manjaro, EndeavourOS
-```
-
-Then build and install:
-
-```sh
-git clone https://github.com/NarkAgni/aarambh.git
-cd aarambh
-./scripts/install.sh --dry-run     # optional: show every change first
-make install                       # default theme (accordion)
-```
-
-**Secure Boot on?** Nothing changes in these steps. If the installer ends with
-an 8-digit password, one blue screen appears at the next restart to confirm
-the signing key: follow **[docs/SECURE_BOOT.md](docs/SECURE_BOOT.md)**, which
-shows every screen.
-
-To install with a theme and a default OS in one go:
-
-```sh
-make install THEME=cinema DEFAULT=fedora
-# same as: ./scripts/install.sh --theme cinema --default fedora
-```
-
-List the themes first, before installing (no root needed):
-
-```sh
-make themes
-# same as: ./scripts/install.sh --list-themes
-```
-
-Screenshots of each are under **Themes** in *Using Aarambh*. A wrong name stops
-the installer before anything is changed. The Plymouth boot splash follows the
-theme automatically, nothing else to install.
-
-On every other Linux on the same disk, boot it once and run:
-
-```sh
-sudo bash /boot/efi/EFI/aarambh/hooks/setup.sh
-```
-
-(If that OS mounts the EFI partition at `/efi` or `/boot`, use that path
-instead of `/boot/efi`.)
-
-Change the theme or default OS any time later, from any connected OS:
-
-```sh
-aarambh --themes                           # list themes, * marks the current one
-aarambh --theme editorial-dark             # switch theme
-aarambh --default ubuntu --timeout 5       # default OS and countdown
-```
-
-The change applies from the next boot for every OS on the disk. To try a
-theme without touching your real boot menu, run `make qemu THEME=hud`.
-
-**Updating Aarambh.** Pull the new version and run `make install` on one OS as
-before. It updates the boot menu and copies the new hooks to the EFI
-partition. Then run the `setup.sh` line above once on every other Linux OS,
-so its OS-side parts (Plymouth theme, `aarambh` command, boot service) are
-updated too. Windows needs nothing. Kernel updates, theme and default changes
-never need this step.
-
-> **Secure Boot can stay on.** The installer signs Aarambh and starts it
-> through your distribution's shim. If your PC does not trust the signing key
-> yet, the installer prints an 8-digit password and a blue **Perform MOK
-> management** screen appears once at the next restart: choose **Enroll MOK →
-> Continue → Yes**, type the password, then **Reboot**. The step-by-step guide
-> with screenshots: **[docs/SECURE_BOOT.md](docs/SECURE_BOOT.md)**.
-
-**Something went wrong?** Start the system once it boots again (see *Safety
-and recovery*), then run `aarambh-debug`, or `make debug` from the source
-folder if the install did not finish. It writes one report file with
-everything needed to find the problem; attach it to an
-[issue](https://github.com/NarkAgni/aarambh/issues/new).
+Each theme with a larger screenshot and its keys is listed under **Themes**
+in [Using Aarambh](#using-aarambh).
 
 ---
+
+# Reference
+
+Everything below is detail: how Aarambh works and every change it makes to
+your machine. Click a line to open it.
 
 ## What Aarambh is
 
@@ -264,6 +429,14 @@ Which kernels can start directly:
 |------------------------------------------------|--------------------------|
 | On the EFI partition (systemd-boot, ESP=/boot) | Every kernel, in place   |
 | On another partition (most GRUB installs)      | The newest kernel, copied to the ESP |
+
+A kernel is only started directly when everything it needs is known to be
+complete. It goes through the OS's own loader instead when:
+
+- its boot entry names an initramfs or microcode file that does not exist
+- its entry uses GRUB's `$kernelopts` and `grubenv` does not set it
+- its command line is longer than 2047 characters (the limit of an x86
+  kernel) or it has more than four initramfs parts; nothing is ever cut short
 
 Firmware, Restart and Power Off call the UEFI runtime services directly.
 Firmware sets the `OsIndications` variable so the machine reboots into the
@@ -542,12 +715,16 @@ Options:
 | `/etc/aarambh.env`                              | every system                  | Read by all scripts above                | Detected OS id, ESP, boot loader, signing key and shim |
 | `/etc/aarambh/manifest`                         | every system                  | Read by `uninstall.sh`                   | List of everything to undo |
 
-The refresh trigger is `hooks/triggers/aarambh-refresh`. It ends with
-`|| true; exit 0`, so a problem in Aarambh never breaks a kernel update.
+The refresh trigger is `hooks/triggers/aarambh-refresh`. It always ends with
+`exit 0`, so a problem in Aarambh never breaks a kernel update. Its warnings
+and errors go to the system log; read them with `journalctl -t aarambh`.
 Kernel updates need no action from you.
 
-Without systemd the one-time choice is still reset: Aarambh rewrites
-`next-<os>.cfg` on every boot it starts.
+Two triggers that fire at the same time wait for each other, so the kernel
+list and the kernel copy are only ever written by one of them.
+
+Without systemd the one-time choice is still reset: Aarambh empties
+`next-<os>.cfg` on the next boot it starts with the default kernel.
 
 </details>
 
@@ -598,18 +775,25 @@ systemd-boot systems: `loader.conf` is not changed. Aarambh sets
 ├── fonts\  logos\  backgrounds\ Menu assets
 ├── plymouth\<id>\               Boot splash themes
 ├── hooks\                       Copy of the repo's hooks/ for the other systems
-├── linux\<id>\vmlinuz           Copy of the newest kernel (direct boot)
-├── linux\<id>\initrd.img        Its initramfs, with microcode in front
+├── linux\<id>\vmlinuz-<n>       Copy of the newest kernel (direct boot)
+├── linux\<id>\initrd-<n>.img    Its initramfs, with microcode in front
 ├── <id>.kernels                 Kernel list written by aarambh-kernels
 └── next-<id>.cfg                One-time GRUB kernel choice, usually empty
 ```
 
 Nothing is written outside `\EFI\aarambh\`. The direct-boot copy is the
 largest item. Before copying, `aarambh-kernels` checks that at least 8 MB of
-the ESP stays free. If the kernel does not fit, it deletes `linux\<id>\`,
-prints a warning and that OS boots through its own loader instead. Systems
-whose kernels already live on the ESP (systemd-boot, ESP mounted at `/boot`)
-need no copy at all.
+the ESP stays free. If the kernel does not fit, it prints a warning and that
+OS boots through its own loader instead. Systems whose kernels already live
+on the ESP (systemd-boot, ESP mounted at `/boot`) need no copy at all.
+
+The kernel and its initramfs are copied as a pair with the same `<n>` in
+their names (12 characters made from the content of both files), and
+`<id>.kernels` names the pair it boots. After a kernel update the new pair is
+written next to the old one, the list is replaced in one step, and only then
+is the old pair deleted. An update that is interrupted or fails halfway
+therefore never leaves a kernel paired with the initramfs of another one, and
+never leaves a half-written list: the menu keeps the last complete one.
 
 </details>
 
@@ -622,8 +806,9 @@ At boot time Aarambh:
 
 - reads files inside `\EFI\aarambh\`, kernel files named in `<id>.kernels`,
   and the folder names under `\EFI\` (for autodetect)
-- writes only `next-<id>.cfg`, the restart and shutdown splash images under
-  `shutdown\` and `wc.state` on the ESP
+- writes only `next-<id>.cfg` (and only when the kernel choice changed), the
+  restart and shutdown splash images under `shutdown\` and `wc.state` on the
+  ESP
 - maps the framebuffer write-combining while the menu runs, and puts the
   firmware's memory types back before it starts any system
 - writes firmware variables only when you act: `OsIndications` when you choose
@@ -806,6 +991,10 @@ Both accept `--dry-run`. `make uninstall` runs the first command from the repo.
 | Esc / Backspace     | Close advanced options         |
 | E                   | Edit boot options (see below)  |
 
+A kernel picked under advanced options is used for that one boot. If Aarambh
+cannot hand the choice to the OS's boot loader, it shows **Could not save the
+kernel choice** and starts nothing, instead of booting a different kernel.
+
 Themes that list OSes vertically swap the arrows: Up / Down switch entry and
 Right opens the kernel list. Every theme shows the keys that work right now
 at the bottom of the screen. Any key press stops the countdown.
@@ -855,18 +1044,19 @@ entry Firmware  | @firmware               | logos/settings.png | backgrounds/set
 | Key            | Meaning                                               |
 |----------------|-------------------------------------------------------|
 | `theme`        | Theme name, see **Themes** below                      |
-| `timeout`      | Seconds before the default entry starts, `0` disables |
+| `timeout`      | Seconds before the default entry starts, `0` disables the countdown (the menu then waits for a key; it does not boot at once). Only an operating system is started by the countdown, never Restart, Power Off or Firmware |
 | `default`      | Default entry: OS id (`ubuntu`, `fedora`, `windows`), menu title, or index starting at 0 |
 | `autodetect`   | `yes` adds loaders found under `\EFI\` (Windows, other OSes) |
 | `edit`         | `yes` (default) lets E edit boot options, `no` turns it off |
 | `write_combining` | `yes` (default) maps the screen write-combining for smooth animation, `no` keeps the firmware's slower path (see **Smooth animation** under *Safety and recovery*) |
-| `font_light`, `font_regular`, `font_bold`, `font_mono` | TTF paths     |
+| `font_light`, `font_regular`, `font_bold`, `font_mono` | TTF paths. A font file that is missing or damaged (cut short, wrong checksum) is not used; its text is drawn with one of the other fonts |
 | `utc_offset`   | Written by the hooks, e.g. `+0530`                    |
 | `entry`        | `title \| loader \| logo \| background \| key \| accent` |
 
 Loaders can also be `@firmware`, `@reboot` or `@shutdown`. An entry whose
 loader file does not exist is skipped. Operating systems are always listed
-before Firmware, Restart and Power Off.
+before Firmware, Restart and Power Off. When no operating system is left, the
+menu shows **No bootable system found** and waits for a key.
 
 </details>
 
@@ -990,9 +1180,14 @@ not edit `mkinitcpio.conf` for you. To get the splash:
 
 <br>
 
-- BLS systems (Fedora family, systemd-boot): the `options` of each entry.
+- BLS systems (Fedora family, systemd-boot): the `options` of each entry. With
+  GRUB, variables in them (`$kernelopts`, `$tuned_params`) are filled in from
+  `grubenv` the way GRUB does it, and everything else on the line is kept.
 - Other systems: the command line of the running kernel, without
   `BOOT_IMAGE=`, `initrd=` and recovery-only options.
+
+The longest command line is 2047 characters, the limit of the kernel itself.
+A longer one is not shortened: that kernel starts through GRUB instead.
 
 To use a fixed command line instead, write it to `/etc/aarambh/cmdline` and run
 `sudo aarambh-kernels`. Recovery mode always starts through GRUB.
@@ -1054,7 +1249,7 @@ smallest working example is `src/themes/minimal/minimal.c`.
 | Build             | `build-essential gnu-efi curl`               | `gcc make gnu-efi-devel curl`           | `base-devel gnu-efi curl`              |
 | Install           | `efibootmgr`                                 | `efibootmgr`                            | `efibootmgr`                           |
 | Secure Boot (installed by `setup.sh` when needed) | `shim-signed sbsigntool mokutil openssl` | `shim-x64 sbsigntools mokutil openssl` | `sbsigntools openssl` (with `sbctl` keys) |
-| `make test`       | `bash coreutils openssl sbsigntool`          | `bash coreutils openssl sbsigntools`    | `bash coreutils openssl sbsigntools`   |
+| `make test`       | the Build row plus `bash coreutils util-linux openssl sbsigntool` | the Build row plus `bash coreutils util-linux openssl sbsigntools libasan libubsan` | the Build row plus `bash coreutils util-linux openssl sbsigntools` |
 | Test in QEMU      | `qemu-system-x86 ovmf mtools dosfstools`     | `qemu-system-x86 edk2-ovmf mtools dosfstools` | `qemu-desktop edk2-ovmf mtools dosfstools` |
 | Test in QEMU with Secure Boot (`make qemu SECURE_BOOT=1`) | the QEMU row plus `shim-signed sbsigntool openssl python3-virt-firmware` | the QEMU row plus `shim-x64 sbsigntools openssl python3-virt-firmware` | the QEMU row plus `sbsigntools openssl`, and `pipx install virt-firmware`; pass `SHIM=` and `MOK_MANAGER=` from another distribution |
 | Regenerate assets | `imagemagick fonts-dejavu-core librsvg2-bin` | `ImageMagick dejavu-sans-fonts librsvg2-tools` | `imagemagick ttf-dejavu librsvg`  |
@@ -1068,7 +1263,9 @@ sudo apt install build-essential gnu-efi curl efibootmgr \
 ```
 
 `make test` skips the Secure Boot scenario when `sbsign` or `openssl` is
-missing, and `make qemu SECURE_BOOT=1` names the package it is missing.
+missing, runs its unit tests without AddressSanitizer when `libasan` is
+missing (it says so), and `make qemu SECURE_BOOT=1` names the package it is
+missing.
 
 Tested with gnu-efi 3.0.15 (Ubuntu 24.04 package) and gnu-efi 4.0.x.
 
@@ -1081,13 +1278,20 @@ Tested with gnu-efi 3.0.15 (Ubuntu 24.04 package) and gnu-efi 4.0.x.
 
 ```sh
 make            # build/aarambh.efi
-make test       # setup.sh / uninstall.sh against simulated distributions
+make test       # hooks against simulated distributions, failure paths, unit tests
 make qemu       # boot the menu in QEMU with sample entries
 make assets     # regenerate logos, backgrounds and Plymouth themes
 make clean
 ```
 
-- `make test` creates fake Ubuntu (also with Secure Boot on), Fedora, Arch
+- `make test` runs three things, none of which touches your system:
+  `tests/hooks/run.sh` (below), `tests/hooks/failures.sh`, which breaks one
+  step at a time (a missing initramfs, a failed copy, a full EFI partition, a
+  kernel list that cannot be generated) and checks that the last good state
+  survives, and `tests/unit/run.sh`, which builds parts of `aarambh.efi` as
+  normal Linux programs and feeds them damaged fonts, failed allocations and
+  failed writes.
+- `tests/hooks/run.sh` creates fake Ubuntu (also with Secure Boot on), Fedora, Arch
   (GRUB and systemd-boot), openSUSE, Void and an unknown Ubuntu derivative in
   a temporary folder, with
   stub commands, and compares the results with `tests/hooks/expected/`.
@@ -1140,7 +1344,8 @@ aarambh/
 │   └── apt/, pacman/           Copy shim updates next to Aarambh
 ├── scripts/                    install.sh, make-assets.sh
 ├── tests/
-│   ├── hooks/                  Simulated distributions for setup/uninstall
+│   ├── hooks/                  Simulated distributions for setup/uninstall, failure paths
+│   ├── unit/                   Parts of aarambh.efi against mocked UEFI services
 │   └── qemu/                   Boot the menu in a virtual machine
 ├── docs/THEMES.md              Writing a theme
 ├── docs/SECURE_BOOT.md         Installing with Secure Boot on, screen by screen
@@ -1155,13 +1360,13 @@ aarambh/
 
 Known build and install problems, with the fix for each.
 
-<details open>
+<details>
 <summary><b>Reporting a problem: the debug report</b></summary>
 
 <br>
 
 Boot the system normally (if Aarambh does not get you there, use the
-firmware boot menu, see *Safety and recovery*), then run:
+firmware boot menu, see *If something goes wrong*), then run:
 
 ```sh
 aarambh-debug          # installed by setup.sh
@@ -1220,8 +1425,8 @@ cd aarambh && git pull
 make install
 ```
 
-On every other Linux on the same disk, run `setup.sh` again (see *Quick
-start*). If it still fails, run `make debug`.
+On every other Linux on the same disk, run `setup.sh` again (see step 6 of
+*Install*). If it still fails, run `make debug`.
 
 Run `aarambh` **without** `sudo`; it asks for your password itself. On
 Fedora/RHEL-like systems `sudo aarambh` can still say *command not found*,
@@ -1292,7 +1497,8 @@ aliases (`LoadFile2Protocol`, `LoadedImageProtocol`, `DevicePathProtocol`,
 
 **Cause:** gnu-efi is not installed.
 
-**Fix:** install it with the command for your distribution in **Quick start**.
+**Fix:** install it with the command for your distribution in
+[step 2 of Install](#step-2-install-the-tools-needed-to-build-it).
 
 </details>
 
@@ -1357,6 +1563,75 @@ spare.
 **Fix:** free space on the ESP or make the initramfs smaller (initramfs-tools:
 `MODULES=dep` is already set; dracut: `hostonly="yes"`), then run
 `sudo aarambh-kernels`.
+
+</details>
+
+<details>
+<summary><b>Other <code>direct boot disabled</code> warnings</b></summary>
+
+<br>
+
+`aarambh-kernels` prints one of these when it lists a kernel without direct
+boot. Nothing breaks in any of them: that kernel starts through the OS's own
+boot loader, as it did before Aarambh.
+
+| Warning                                         | Cause and fix |
+|-------------------------------------------------|---------------|
+| `... names an initrd that does not exist`       | The boot entry lists an initramfs or microcode file that is gone. Rebuild the initramfs (`sudo dracut -f`, `sudo mkinitcpio -P`) or reinstall the microcode package, then `sudo aarambh-kernels` |
+| `... uses $kernelopts, which grubenv does not set` | Fedora or RHEL entry that relies on a GRUB variable with no value. `sudo grub2-mkconfig -o /boot/grub2/grub.cfg` writes it again |
+| `... has a path or a command line too long for Aarambh` | More than 2047 characters of kernel options, or more than four initramfs parts. Shorten the options, or keep starting that kernel through GRUB |
+| `copying or signing the kernel failed`          | The EFI partition is read-only or has errors, or the signing key is unreadable. Check `findmnt -t vfat` and `sudo aarambh-debug` |
+| `the kernel command line could not be read from /proc/cmdline` | `aarambh-kernels` ran where `/proc` is not mounted (a chroot). Run it again from the booted system |
+
+</details>
+
+<details>
+<summary><b><code>the boot menu was not refreshed</code> during a kernel update</b></summary>
+
+<br>
+
+**Cause:** `aarambh-kernels` failed while a package was being installed. The
+update itself is not affected, and the menu keeps the kernel list of the last
+run that worked.
+
+**Fix:** read the reason and run it by hand:
+
+```sh
+journalctl -t aarambh | tail -n 20
+sudo aarambh-kernels
+```
+
+</details>
+
+<details>
+<summary><b>The menu says <i>No bootable system found</i></b></summary>
+
+<br>
+
+**Cause:** none of the loaders in `aarambh.conf` exists and autodetect found
+no other one under `\EFI\` (wrong EFI partition, or the loaders were
+deleted). The menu waits for a key; it never restarts by itself.
+
+**Fix:** start your OS from the firmware boot menu (**F12**, **F8**, **F11**
+or **Esc** at power on), then run `aarambh-debug`. Running `setup.sh` again
+writes the entry of that OS back.
+
+</details>
+
+<details>
+<summary><b>The menu says <i>Could not save the kernel choice, nothing was started</i></b></summary>
+
+<br>
+
+**Cause:** you picked a kernel under *Advanced options* that starts through
+GRUB or systemd-boot, and Aarambh could not store the choice for it: the EFI
+partition is full, read-only or damaged, or the firmware refused the variable.
+Starting the loader anyway would have booted its default kernel instead of
+yours, so nothing was started.
+
+**Fix:** press **Enter** on the entry itself to start the default kernel, then
+free space on the EFI partition (`df -h /boot/efi`) or check it with
+`sudo fsck.vfat -n` on its device.
 
 </details>
 

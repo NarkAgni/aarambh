@@ -22,16 +22,22 @@ typedef enum {
     ONESHOT_NONE
 } OneShotMethod;
 
+/* The longest command line an x86 kernel reads (COMMAND_LINE_SIZE). */
+#define AARAMBH_CMDLINE_MAX 2048
+
 /*
  * One line of <key>.kernels, written by the OS-side hook. `initrd` may list
  * several ESP paths separated by commas; they are loaded back to back.
+ *
+ * A boot field longer than its array is never cut short: the kernel is then
+ * left without direct-boot fields and starts through the OS's own loader.
  */
 typedef struct {
     char title[64];
     char id[192];
     char kernel[160];
     char initrd[384];
-    char cmdline[768];
+    char cmdline[AARAMBH_CMDLINE_MAX];
 } Kernel;
 
 /* One "entry" line of aarambh.conf, with its decoded logo and background. */

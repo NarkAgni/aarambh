@@ -189,6 +189,10 @@ list_scanned_kernels() {
     load_grub_defaults
     cmdline=$(direct_boot_cmdline)
 
+    if [ -z "$cmdline" ]; then
+        disable_direct_boot "the kernel command line could not be read from /proc/cmdline"
+    fi
+
     if [ "$BOOTLOADER" = grub ]; then
         echo "@oneshot grub"
         uuid=$(grub_root_uuid)
@@ -233,7 +237,7 @@ list_scanned_kernels() {
             entry="$(kernel_title "$version")|$name"
         fi
 
-        if [ -n "$initrd" ]; then
+        if [ -n "$initrd" ] && [ -n "$cmdline" ]; then
             # shellcheck disable=SC2046
             set -- $(microcode_images) "$initrd"
             parts=$(esp_paths "$kernel" "$@" || true)
@@ -253,4 +257,6 @@ list_scanned_kernels() {
             echo "$recovery"
         fi
     done
+
+    return 0
 }

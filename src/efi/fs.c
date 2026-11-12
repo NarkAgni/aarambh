@@ -223,13 +223,46 @@ int fs_make_directory(const char *name)
     return 1;
 }
 
+/* Opening with CREATE keeps the old content of a file that is still there. */
+static int truncate_file(EFI_FILE_HANDLE file)
+{
+    EFI_FILE_INFO *info = LibFileInfo(file);
+    EFI_STATUS status = EFI_SUCCESS;
+
+    if (info == NULL) {
+        return 0;
+    }
+
+    if (info->FileSize != 0) {
+        info->FileSize = 0;
+        status = file->SetInfo(file, &GenericFileInfo, (UINTN)info->Size, info);
+    }
+
+    FreePool(info);
+    return status == EFI_SUCCESS;
+}
+
+static int write_all(EFI_FILE_HANDLE file, const void *data, UINTN size)
+{
+    UINTN written = size;
+
+    if (size == 0) {
+        return 1;
+    }
+
+    return file->Write(file, &written, (void *)data) == EFI_SUCCESS && written == size;
+}
+
+/*
+ * 1 only when the file now holds exactly `data`: a delete that fails, a short
+ * write and a failed flush all leave old or partial content behind.
+ */
 int fs_write_data(const char *name, const void *data, UINTN size)
 {
     CHAR16 path[FS_PATH_MAX];
     EFI_FILE_HANDLE file;
     UINT64 read_write = EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE;
-    UINTN length = size;
-    EFI_STATUS status = EFI_SUCCESS;
+    int written;
 
     fs_make_path(path, FS_PATH_MAX, name);
 
@@ -241,12 +274,13 @@ int fs_write_data(const char *name, const void *data, UINTN size)
         return 0;
     }
 
-    if (length > 0) {
-        status = file->Write(file, &length, (void *)data);
+    written = truncate_file(file) && write_all(file, data, size);
+    if (file->Flush(file) != EFI_SUCCESS) {
+        written = 0;
     }
 
     file->Close(file);
-    return status == EFI_SUCCESS;
+    return written;
 }
 
 #define DIRECTORY_INFO_SIZE (SIZE_OF_EFI_FILE_INFO + 512)

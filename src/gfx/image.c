@@ -4,19 +4,38 @@
 #include "gfx/pixel.h"
 #include "lib/memory.h"
 
+/* A failed allocation leaves an empty image, so nothing draws through NULL. */
 int image_alloc(Image *image, int width, int height)
 {
+    image->width = 0;
+    image->height = 0;
+    image->pixels = NULL;
+
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+
+    image->pixels = mem_alloc((mem_size_t)width * height * 4);
+    if (image->pixels == NULL) {
+        return 0;
+    }
+
     image->width = width;
     image->height = height;
-    image->pixels = mem_alloc((mem_size_t)width * height * 4);
-
-    return image->pixels != NULL;
+    return 1;
 }
 
 void image_free(Image *image)
 {
     mem_free(image->pixels);
     image->pixels = NULL;
+    image->width = 0;
+    image->height = 0;
+}
+
+int image_is_empty(const Image *image)
+{
+    return image->pixels == NULL;
 }
 
 int image_decode(Image *image, const void *data, int size)

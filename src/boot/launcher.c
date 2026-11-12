@@ -37,20 +37,34 @@ int launcher_boots_direct(const Entry *entry, int kernel)
         && linux_can_boot_direct(&entry->kernels[kernel_choice(kernel)]);
 }
 
-EFI_STATUS launcher_run(const Entry *entry, int kernel, const char *cmdline,
-                        const PlymouthOverlay *overlay, FsProgressCallback progress)
+static LaunchError launch_error(EFI_STATUS status)
 {
+    if (status == EFI_SECURITY_VIOLATION) {
+        return LAUNCH_BLOCKED;
+    }
+
+    return LAUNCH_FAILED;
+}
+
+LaunchError launcher_run(const Entry *entry, int kernel, const char *cmdline,
+                         const PlymouthOverlay *overlay, FsProgressCallback progress)
+{
+    EFI_STATUS status;
+
     run_power_action(entry->action);
 
     if (launcher_boots_direct(entry, kernel)) {
-        EFI_STATUS status = linux_boot(&entry->kernels[kernel_choice(kernel)], cmdline, overlay,
-                                       progress);
+        status = linux_boot(&entry->kernels[kernel_choice(kernel)], cmdline, overlay, progress);
 
         if (cmdline != NULL) {
-            return status;
+            return launch_error(status);
         }
     }
 
-    next_boot_write(entry, kernel);
-    return image_loader_start(entry->loader);
+    status = next_boot_write(entry, kernel);
+    if (EFI_ERROR(status) && kernel >= 0) {
+        return LAUNCH_CHOICE_NOT_SAVED;
+    }
+
+    return launch_error(image_loader_start(entry->loader));
 }

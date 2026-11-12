@@ -95,6 +95,10 @@ int image_cover(Image *destination, const Image *source, int width, int height)
     Image working;
     int owned;
 
+    if (image_is_empty(source)) {
+        return 0;
+    }
+
     if (source->width == width && source->height == height) {
         if (!image_alloc(destination, width, height)) {
             return 0;

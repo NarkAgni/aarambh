@@ -1,4 +1,4 @@
 @oneshot grub
-Linux 6.11.4-301.fc41.x86_64|m-6.11.4-301.fc41.x86_64|\EFI\aarambh\linux\fedora\vmlinuz|\EFI\aarambh\linux\fedora\initrd.img|root=UUID=2222 ro rhgb quiet
+Linux 6.11.4-301.fc41.x86_64|m-6.11.4-301.fc41.x86_64|\EFI\aarambh\linux\fedora\vmlinuz-<id>|\EFI\aarambh\linux\fedora\initrd-<id>.img|root=UUID=2222 ro rhgb quiet
 Linux 6.10.1-200.fc41.x86_64|m-6.10.1-200.fc41.x86_64
 Rescue mode|m-0-rescue-abc

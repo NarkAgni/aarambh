@@ -43,6 +43,25 @@ write_file() {
     cat > "$target"
 }
 
+# Replace a file with stdin through one rename. The old file stays untouched
+# when the new content is empty or cannot be written completely.
+replace_file() {
+    local target=$1
+    local scratch
+
+    if ! scratch=$(mktemp "$target.XXXXXX"); then
+        cat >/dev/null
+        return 1
+    fi
+
+    if cat > "$scratch" && [ -s "$scratch" ] && mv -f "$scratch" "$target"; then
+        return 0
+    fi
+
+    rm -f "$scratch"
+    return 1
+}
+
 has_command() {
     command -v "$1" >/dev/null 2>&1
 }

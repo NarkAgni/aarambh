@@ -2,7 +2,18 @@
 #
 # Installed into the kernel and initramfs hook directories of the running
 # distribution. Refreshes Aarambh after every kernel or initramfs change and
-# never fails the package operation.
+# never fails the package operation. Warnings and errors go to the system log
+# (journalctl -t aarambh), so a refresh that did not work can be found later.
 
-/usr/local/sbin/aarambh-kernels >/dev/null 2>&1 || true
+messages=$(/usr/local/sbin/aarambh-kernels 2>&1 >/dev/null)
+status=$?
+
+if [ -n "$messages" ] && command -v logger >/dev/null 2>&1; then
+    printf '%s\n' "$messages" | tail -n 20 | logger -t aarambh || true
+fi
+
+if [ "$status" != 0 ]; then
+    echo "aarambh: the boot menu was not refreshed; the system still boots. Details: journalctl -t aarambh" >&2
+fi
+
 exit 0

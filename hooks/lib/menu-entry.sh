@@ -56,7 +56,6 @@ menu_line() {
 register_menu_entry() {
     local line
     local config="$ESP_DIR/aarambh.conf"
-    local updated
 
     line=$(menu_line "$1")
     log "menu entry: $line"
@@ -66,7 +65,6 @@ register_menu_entry() {
         return 0
     fi
 
-    updated=$(mktemp)
     ENTRY_KEY="$KEY" ENTRY_LINE="$line" awk '
         BEGIN {
             key = ENVIRON["ENTRY_KEY"]
@@ -100,8 +98,6 @@ register_menu_entry() {
                 print line
             }
         }
-    ' "$config" "$config" > "$updated"
-
-    cat "$updated" > "$config"
-    rm -f "$updated"
+    ' "$config" "$config" | replace_file "$config" \
+        || die "could not update $config (is the EFI partition full or read-only?)"
 }

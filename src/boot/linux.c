@@ -46,6 +46,28 @@ static void attach_cmdline(EFI_HANDLE child, const char *cmdline)
     loaded->LoadOptions = load_options;
 }
 
+/* 1 when every path of the comma separated list fits collect_initrd_parts. */
+int linux_initrd_list_fits(const char *list)
+{
+    int parts = 1;
+    int length = 0;
+
+    for (; *list != '\0'; list++) {
+        if (*list == ',') {
+            parts++;
+            length = 0;
+        } else {
+            length++;
+        }
+
+        if (parts > MAX_INITRD_PARTS || length >= INITRD_PATH_MAX) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 static int collect_initrd_parts(InitrdParts *parts, const char *list)
 {
     char buffer[sizeof(((Kernel *)0)->initrd)];

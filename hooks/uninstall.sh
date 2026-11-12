@@ -52,10 +52,8 @@ remove_menu_entry() {
             }
         }
         { print }
-    ' "$config" > "$config.tmp"
-
-    cat "$config.tmp" > "$config"
-    rm -f "$config.tmp"
+    ' "$config" | replace_file "$config" \
+        || warn "could not remove the '$KEY' entry from $config"
 }
 
 remove_esp_files() {

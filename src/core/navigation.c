@@ -3,6 +3,36 @@
 #include "aarambh/timing.h"
 #include "lib/str.h"
 
+#define MESSAGE_NEVER -100000.0f
+
+/*
+ * Selects the default entry and starts its countdown. Only an operating
+ * system starts by itself: with Restart, Power Off or Firmware selected, or
+ * no system found at all, the menu waits for a key.
+ */
+void nav_init(AppState *app, float now)
+{
+    int index = app->config.default_index;
+
+    if (index < 0 || index >= app->entries.count) {
+        index = 0;
+    }
+
+    app->selected = index;
+    app->launch_kernel = -1;
+    app->message_time = MESSAGE_NEVER;
+    app->intro_start = now;
+
+    tween_init(&app->position, (float)index, AARAMBH_MOVE_MS);
+    tween_init(&app->focus, 0.0f, AARAMBH_FOCUS_MS);
+    tween_init(&app->list, 0.0f, AARAMBH_LIST_MS);
+    tween_init(&app->edit, 0.0f, AARAMBH_FOCUS_MS);
+
+    app->countdown_active = app->config.timeout_seconds > 0
+                         && entry_is_system(&app->entries.items[index]);
+    app->countdown_deadline = now + AARAMBH_INTRO_MS + app->config.timeout_seconds * 1000.0f;
+}
+
 Entry *nav_selected_entry(AppState *app)
 {
     return &app->entries.items[app->selected];

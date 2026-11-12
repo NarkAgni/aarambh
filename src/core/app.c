@@ -15,8 +15,6 @@
 #include "efi/video.h"
 #include "lib/str.h"
 
-#define MESSAGE_NEVER -100000.0f
-
 static AppState app;
 
 static void build_status(float now)
@@ -27,6 +25,11 @@ static void build_status(float now)
 
     if (now - app.message_time < AARAMBH_MESSAGE_MS) {
         str_copy(app.status, app.message, sizeof(app.status));
+        return;
+    }
+
+    if (!entries_has_system(&app.entries)) {
+        str_copy(app.status, "No bootable system found", sizeof(app.status));
         return;
     }
 
@@ -89,28 +92,6 @@ static void setup_context(void)
     app.context.font_mono = &app.fonts.mono;
 }
 
-static void setup_navigation(float now)
-{
-    int index = app.config.default_index;
-
-    if (index < 0 || index >= app.entries.count) {
-        index = 0;
-    }
-
-    app.selected = index;
-    app.launch_kernel = -1;
-    app.message_time = MESSAGE_NEVER;
-    app.intro_start = now;
-
-    tween_init(&app.position, (float)index, AARAMBH_MOVE_MS);
-    tween_init(&app.focus, 0.0f, AARAMBH_FOCUS_MS);
-    tween_init(&app.list, 0.0f, AARAMBH_LIST_MS);
-    tween_init(&app.edit, 0.0f, AARAMBH_FOCUS_MS);
-
-    app.countdown_active = app.config.timeout_seconds > 0;
-    app.countdown_deadline = now + AARAMBH_INTRO_MS + app.config.timeout_seconds * 1000.0f;
-}
-
 EFI_STATUS app_init(void)
 {
     EFI_STATUS status;
@@ -124,18 +105,21 @@ EFI_STATUS app_init(void)
     video_clear(&app.screen);
 
     config_load(&app.config, &app.entries);
-    video_enable_write_combining(app.config.write_combining);
-    assets_load_fonts(&app.fonts, &app.config);
-    assets_load_entries(&app.entries, &app.screen);
-
     if (app.entries.count == 0) {
         return EFI_NOT_FOUND;
     }
 
+    assets_load_fonts(&app.fonts, &app.config);
+    if (!assets_load_entries(&app.entries, &app.screen)) {
+        return EFI_OUT_OF_RESOURCES;
+    }
+
+    video_enable_write_combining(app.config.write_combining);
+
     clock_init(&app.clock, app.config.utc_offset_minutes);
     app.theme = theme_registry_find(app.config.theme);
 
-    setup_navigation(timer_now_ms());
+    nav_init(&app, timer_now_ms());
     setup_context();
     app.theme->load(&app.context);
     editor_load(&app.context);
@@ -172,28 +156,36 @@ static void build_plymouth_overlay(PlymouthOverlay *overlay, const Entry *entry)
     plymouth_overlay_build(overlay, &app.screen, ui_launch_splash_dot_color());
 }
 
+static const char *launch_error_message(LaunchError error)
+{
+    switch (error) {
+    case LAUNCH_BLOCKED:
+        return "Blocked by Secure Boot";
+    case LAUNCH_CHOICE_NOT_SAVED:
+        return "Could not save the kernel choice, nothing was started";
+    case LAUNCH_FAILED:
+        break;
+    }
+    return "Could not start this system";
+}
+
 static void launch_selected(void)
 {
     Entry *entry = nav_selected_entry(&app);
     PlymouthOverlay overlay;
-    EFI_STATUS status;
+    LaunchError error;
     float now;
 
     shutdown_splash_update(entry, app.theme->name, &app.screen, render_still);
     build_plymouth_overlay(&overlay, entry);
-    status = launcher_run(entry, app.launch_kernel, editor_cmdline(&app), &overlay, draw_frame);
+    error = launcher_run(entry, app.launch_kernel, editor_cmdline(&app), &overlay, draw_frame);
     plymouth_overlay_free(&overlay);
 
     video_restore_mode();
     system_hide_cursor();
 
     now = timer_now_ms();
-    if (status == EFI_SECURITY_VIOLATION) {
-        nav_show_message(&app, "Blocked by Secure Boot", now);
-    } else {
-        nav_show_message(&app, "Could not start this system", now);
-    }
-
+    nav_show_message(&app, launch_error_message(error), now);
     nav_reset_after_failure(&app, now);
 }
 

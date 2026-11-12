@@ -32,7 +32,8 @@ typedef struct {
     Glyph glyphs[FONT_GLYPH_COUNT];
 } Face;
 
-int font_init(Font *font, unsigned char *data);
+/* `data` must stay allocated while the font is used; a damaged font is refused. */
+int font_init(Font *font, unsigned char *data, int size);
 
 void face_init(Face *face, Font *font, float pixel_height);
 int face_line_height(const Face *face);

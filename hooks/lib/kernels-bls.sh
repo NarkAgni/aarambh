@@ -29,10 +29,46 @@ root_device() {
     sed -n 's/.*\broot=\([^ ]*\).*/\1/p' "$ROOT/proc/cmdline" 2>/dev/null || true
 }
 
+# The machine id an entry was written for: its machine-id field, or the id
+# kernel-install puts in front of the file name.
+entry_machine_id() {
+    local file=$1
+    local id
+    local name
+
+    id=$(bls_field machine-id "$file")
+    name=$(basename "$file")
+
+    if [ -z "$id" ] && [[ "$name" =~ ^([0-9a-f]{32})- ]]; then
+        id=${BASH_REMATCH[1]}
+    fi
+
+    echo "$id"
+}
+
+# Succeeds only when the entry's options hold exactly this root= argument:
+# /dev/sda1 must not match /dev/sda10.
+boots_root() {
+    local file=$1
+    local root=$2
+    local token
+
+    for token in $(bls_all_fields options "$file"); do
+        if [ "$token" = "root=$root" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # On a shared ESP, keep only the entries that belong to this installation.
+# A machine id decides when both sides have one; only an entry without one is
+# matched by its root= argument.
 belongs_to_this_os() {
     local file=$1
     local id
+    local entry_id
     local root
 
     if [ "$BOOTLOADER" != systemd-boot ]; then
@@ -40,22 +76,21 @@ belongs_to_this_os() {
     fi
 
     id=$(machine_id)
+    entry_id=$(entry_machine_id "$file")
     root=$(root_device)
 
     if [ -n "$id" ]; then
         case "$(basename "$file")" in
             "$id"-*) return 0 ;;
         esac
-        if [ "$(bls_field machine-id "$file")" = "$id" ]; then
-            return 0
+
+        if [ -n "$entry_id" ]; then
+            [ "$entry_id" = "$id" ]
+            return
         fi
     fi
 
-    if [ -n "$root" ] && grep -qs -- "root=$root" "$file"; then
-        return 0
-    fi
-
-    return 1
+    [ -n "$root" ] && boots_root "$file" "$root"
 }
 
 entries_by_version() {
@@ -81,6 +116,7 @@ bls_file() {
     local entry=$1
     local path=$2
     local base
+    local candidate
 
     base=$(dirname "$(dirname "$(dirname "$entry")")")
 
@@ -94,27 +130,82 @@ bls_file() {
     return 1
 }
 
-bls_initrds() {
-    local entry=$1
-    local path
-
-    for path in $(bls_all_fields initrd "$entry"); do
-        bls_file "$entry" "$path" || return 1
-    done
+grub_env_value() {
+    { grub2-editenv list 2>/dev/null || grub-editenv list 2>/dev/null || true; } \
+        | sed -n "s/^$1=//p" | head -n1
 }
 
+# Expand $name and ${name} the way GRUB's blscfg does: values come from
+# grubenv and an unset variable is empty. Nothing is evaluated by the shell.
+grub_expand() {
+    local text=$1
+    local result=""
+    local name
+
+    while [[ "$text" == *'$'* ]]; do
+        result+=${text%%'$'*}
+        text=${text#*'$'}
+
+        if [[ "$text" =~ ^\{([A-Za-z_][A-Za-z0-9_]*)\}(.*)$ ]] \
+            || [[ "$text" =~ ^([A-Za-z_][A-Za-z0-9_]*)(.*)$ ]]; then
+            name=${BASH_REMATCH[1]}
+            text=${BASH_REMATCH[2]}
+            result+=$(grub_env_value "$name")
+        else
+            result+='$'
+        fi
+    done
+
+    printf '%s' "$result$text"
+}
+
+# systemd-boot does not expand variables, GRUB does.
+bls_expand() {
+    if [ "$BOOTLOADER" = grub ] && [[ "$1" == *'$'* ]]; then
+        grub_expand "$1"
+    else
+        printf '%s' "$1"
+    fi
+}
+
+uses_kernelopts() {
+    case "$1" in
+        *'$kernelopts'*|*'${kernelopts}'*) [ "$BOOTLOADER" = grub ] ;;
+        *) return 1 ;;
+    esac
+}
+
+# The files of every initrd line, in order. Fails when one that the entry
+# names is missing: without it the kernel may not find its root filesystem.
+bls_initrds() {
+    local entry=$1
+    local paths
+    local path
+    local file
+    local files=""
+
+    paths=$(bls_expand "$(bls_all_fields initrd "$entry" | tr '\n' ' ')")
+
+    for path in $paths; do
+        file=$(bls_file "$entry" "$path") || return 1
+        files="$files$file"$'\n'
+    done
+
+    printf '%s' "$files"
+}
+
+# The options of an entry on one line. Fails when they rely on $kernelopts
+# and grubenv has none, because root= would be missing.
 bls_options() {
     local options
 
-    options=$(bls_all_fields options "$1" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    options=$(bls_all_fields options "$1" | tr '\n' ' ')
 
-    case "$options" in
-        *'$kernelopts'*)
-            options=$(grub2-editenv list 2>/dev/null | sed -n 's/^kernelopts=//p')
-            ;;
-    esac
+    if uses_kernelopts "$options" && [ -z "$(grub_env_value kernelopts)" ]; then
+        return 1
+    fi
 
-    echo "$options"
+    printf '%s\n' "$(bls_expand "$options")" | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//'
 }
 
 bls_title() {
@@ -136,14 +227,47 @@ bls_id() {
     fi
 }
 
-list_bls_kernels() {
-    local version
-    local entry
-    local line
+# The direct-boot fields of one entry, or nothing when it has to start through
+# the OS's own loader: kernel not found, an initrd it names missing, or
+# options that cannot be worked out.
+bls_direct_fields() {
+    local entry=$1
+    local version=$2
+    local newest=$3
     local kernel
     local initrds
     local options
     local parts
+
+    kernel=$(bls_file "$entry" "$(bls_field linux "$entry")") || return 0
+
+    if ! initrds=$(bls_initrds "$entry"); then
+        disable_direct_boot "$(basename "$entry") names an initrd that does not exist"
+        return 0
+    fi
+
+    if ! options=$(bls_options "$entry"); then
+        disable_direct_boot "$(basename "$entry") uses \$kernelopts, which grubenv does not set"
+        return 0
+    fi
+
+    # shellcheck disable=SC2086
+    parts=$(esp_paths $initrds || true)
+
+    if esp_path "$kernel" >/dev/null && boots_in_place "$kernel" \
+        && { [ -z "$initrds" ] || [ -n "$parts" ]; }; then
+        direct_fields "$(esp_path "$kernel")" "$parts" "$options"
+    elif [ "$newest" = 1 ] && [ -n "$initrds" ] && [[ "$version" != *rescue* ]]; then
+        # shellcheck disable=SC2086
+        if copy_for_direct_boot "$kernel" $initrds; then
+            copied_fields "$options"
+        fi
+    fi
+}
+
+list_bls_kernels() {
+    local version
+    local entry
     local first=1
 
     if [ "$BOOTLOADER" = systemd-boot ]; then
@@ -153,33 +277,10 @@ list_bls_kernels() {
     fi
 
     entries_by_version | while IFS='|' read -r version entry; do
-        line="$(bls_title "$entry" "$version")|$(bls_id "$entry")"
-        kernel=$(bls_file "$entry" "$(bls_field linux "$entry")" || true)
+        echo "$(bls_title "$entry" "$version")|$(bls_id "$entry")$(bls_direct_fields "$entry" "$version" "$first")"
 
-        if [ -z "$kernel" ]; then
-            echo "$line"
-            continue
-        fi
-
-        initrds=$(bls_initrds "$entry" || true)
-        options=$(bls_options "$entry")
-        # shellcheck disable=SC2086
-        parts=$(esp_paths $initrds || true)
-
-        if esp_path "$kernel" >/dev/null && boots_in_place "$kernel" \
-            && { [ -z "$initrds" ] || [ -n "$parts" ]; }; then
-            line="$line$(direct_fields "$(esp_path "$kernel")" "$parts" "$options")"
-        elif [ "$first" = 1 ] && [ -n "$initrds" ] && [[ "$version" != *rescue* ]]; then
-            # shellcheck disable=SC2086
-            if copy_for_direct_boot "$kernel" $initrds; then
-                line="$line$(copied_fields "$options")"
-            fi
-        fi
-
-        if [[ "$version" != *rescue* ]]; then
+        if [[ "$version" != *rescue* ]] && bls_file "$entry" "$(bls_field linux "$entry")" >/dev/null; then
             first=0
         fi
-
-        echo "$line"
     done
 }

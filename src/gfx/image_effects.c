@@ -49,6 +49,10 @@ void image_blend(Image *destination, const Image *from, const Image *to, int amo
     int count = destination->width * destination->height;
     int i;
 
+    if (image_is_empty(from) || image_is_empty(to)) {
+        return;
+    }
+
     for (i = 0; i < count; i++) {
         destination->pixels[i] = pixel_mix(from->pixels[i], to->pixels[i], (UINT32)amount);
     }

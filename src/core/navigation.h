@@ -3,6 +3,8 @@
 
 #include "core/app_state.h"
 
+void nav_init(AppState *app, float now);
+
 Entry *nav_selected_entry(AppState *app);
 
 void nav_select(AppState *app, int index, float now);

@@ -4,7 +4,8 @@
 
 . /etc/aarambh.env
 
-/usr/local/sbin/aarambh-kernels >/dev/null 2>&1 || true
+# Standard output becomes grub.cfg, so only warnings and errors are let through.
+/usr/local/sbin/aarambh-kernels >/dev/null || true
 
 cat <<CFG
 search --no-floppy --file --set=aarambh_esp /EFI/aarambh/next-$KEY.cfg

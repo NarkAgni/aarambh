@@ -3,6 +3,11 @@
 
 #include "aarambh/entry.h"
 
-void next_boot_write(const Entry *entry, int kernel);
+/*
+ * Tells the OS's own loader which kernel to start next: `kernel` from the
+ * list, or the default again for -1. An error means the loader still holds
+ * whatever was stored before.
+ */
+EFI_STATUS next_boot_write(const Entry *entry, int kernel);
 
 #endif

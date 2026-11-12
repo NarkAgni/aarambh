@@ -123,7 +123,7 @@ it when `frame->can_edit` is 1.
 | Field                          | Description                               |
 |--------------------------------|-------------------------------------------|
 | `screen`                       | Back buffer; presented after `render`     |
-| `entries`, `entry_count`       | Entries with decoded `logo`, `background` |
+| `entries`, `entry_count`       | Entries with decoded `logo`, `background` (always the size of the screen, never empty) |
 | `default_index`                | Entry marked as default                   |
 | `font_light/regular/bold/mono` | Loaded fonts for `face_init`              |
 

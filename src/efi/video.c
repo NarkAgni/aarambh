@@ -49,6 +49,8 @@ static void select_best_mode(void)
             best_mode = mode;
             best_area = area;
         }
+
+        FreePool(info);
     }
 
     if (best_mode != gop->Mode->Mode) {

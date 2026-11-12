@@ -27,11 +27,11 @@ $(error Aarambh supports 64-bit x86 PCs (x86_64) only, this machine is $(shell u
 endif
 
 ifeq ($(CRT0),)
-$(error crt0-efi-$(ARCH).o not found. Install gnu-efi with the command for your distribution in the README (Quick start))
+$(error crt0-efi-$(ARCH).o not found. Install gnu-efi with the command for your distribution in the README (Install, step 2))
 endif
 
 ifeq ($(LDS),)
-$(error elf_$(ARCH)_efi.lds not found. Install gnu-efi with the command for your distribution in the README (Quick start))
+$(error elf_$(ARCH)_efi.lds not found. Install gnu-efi with the command for your distribution in the README (Install, step 2))
 endif
 endif
 
@@ -103,6 +103,8 @@ uninstall:
 
 test:
 	./tests/hooks/run.sh
+	./tests/hooks/failures.sh
+	./tests/unit/run.sh
 
 qemu: $(TARGET)
 	./tests/qemu/run.sh $(if $(THEME),--theme $(THEME)) $(if $(DEFAULT),--default $(DEFAULT)) \

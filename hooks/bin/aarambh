@@ -92,9 +92,6 @@ config_value() {
 }
 
 set_config_value() {
-    local updated
-
-    updated=$(mktemp)
     CONFIG_KEY="$1" CONFIG_VALUE="$2" awk '
         BEGIN {
             key = ENVIRON["CONFIG_KEY"]
@@ -118,10 +115,8 @@ set_config_value() {
                 print line
             }
         }
-    ' "$CONFIG_FILE" > "$updated"
-
-    cat "$updated" > "$CONFIG_FILE"
-    rm -f "$updated"
+    ' "$CONFIG_FILE" | replace_file "$CONFIG_FILE" \
+        || die "could not update $CONFIG_FILE (is the EFI partition full or read-only?)"
     sync
 }
 

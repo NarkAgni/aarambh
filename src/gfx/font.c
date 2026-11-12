@@ -1,20 +1,26 @@
 #include "aarambh/gfx/font.h"
 
+#include "gfx/font_check.h"
 #include "gfx/glyph.h"
 #include "lib/memory.h"
 
 #define FIRST_GLYPH ' '
 #define LAST_GLYPH  '~'
 
-int font_init(Font *font, unsigned char *data)
+/* Enough bytes for stb to tell a font from a collection and find font 0. */
+#define FONT_MIN_SIZE 16
+
+int font_init(Font *font, unsigned char *data, int size)
 {
     font->data = data;
     font->loaded = 0;
 
-    if (data != NULL) {
+    if (data != NULL && size >= FONT_MIN_SIZE) {
         int offset = stbtt_GetFontOffsetForIndex(data, 0);
 
-        font->loaded = stbtt_InitFont(&font->info, data, offset);
+        if (font_check(data, size, offset)) {
+            font->loaded = stbtt_InitFont(&font->info, data, offset);
+        }
     }
 
     return font->loaded;

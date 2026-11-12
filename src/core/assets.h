@@ -12,6 +12,7 @@ typedef struct {
 } FontSet;
 
 void assets_load_fonts(FontSet *fonts, const Config *config);
-void assets_load_entries(EntryList *entries, const Image *screen);
+/* 0 when there is not enough memory for even one full-screen background. */
+int assets_load_entries(EntryList *entries, const Image *screen);
 
 #endif

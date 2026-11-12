@@ -11,6 +11,7 @@ typedef struct {
 
 int image_alloc(Image *image, int width, int height);
 void image_free(Image *image);
+int image_is_empty(const Image *image);
 int image_decode(Image *image, const void *data, int size);
 void image_copy(Image *destination, const Image *source);
 void image_make_opaque(Image *image);

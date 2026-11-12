@@ -105,6 +105,12 @@ int str_is_empty(const char *text)
     return text[0] == '\0';
 }
 
+/* 1 when `text` and its terminator fit an array of `capacity` chars. */
+int str_fits(const char *text, mem_size_t capacity)
+{
+    return str_length(text) < capacity;
+}
+
 int str_to_int(const char *text)
 {
     int value = 0;

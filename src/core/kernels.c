@@ -1,5 +1,6 @@
 #include "core/kernels.h"
 
+#include "boot/linux.h"
 #include "efi/fs.h"
 #include "lib/str.h"
 
@@ -33,6 +34,20 @@ static void apply_directive(Entry *entry, char *line)
     }
 }
 
+static int has_direct_fields(char **fields, int field_count)
+{
+    return field_count >= KERNEL_FIELD_COUNT && !str_is_empty(fields[2]);
+}
+
+/* A cut command line can lose root= and still boot, into the wrong place. */
+static int direct_fields_fit(const Kernel *kernel, char **fields)
+{
+    return str_fits(fields[2], sizeof(kernel->kernel))
+        && str_fits(fields[3], sizeof(kernel->initrd))
+        && str_fits(fields[4], sizeof(kernel->cmdline))
+        && linux_initrd_list_fits(fields[3]);
+}
+
 static void parse_kernel(Kernel *kernel, char **fields, int field_count)
 {
     mem_set(kernel, 0, sizeof(*kernel));
@@ -40,17 +55,20 @@ static void parse_kernel(Kernel *kernel, char **fields, int field_count)
     str_copy(kernel->title, fields[0], sizeof(kernel->title));
     str_copy(kernel->id, fields[1], sizeof(kernel->id));
 
-    if (field_count < KERNEL_FIELD_COUNT) {
-        return;
-    }
-
-    if (str_is_empty(fields[2])) {
+    if (!has_direct_fields(fields, field_count) || !direct_fields_fit(kernel, fields)) {
         return;
     }
 
     str_copy(kernel->kernel, fields[2], sizeof(kernel->kernel));
     str_copy(kernel->initrd, fields[3], sizeof(kernel->initrd));
     str_copy(kernel->cmdline, fields[4], sizeof(kernel->cmdline));
+}
+
+/* The id picks the kernel in the OS's loader; a cut id would pick another. */
+static int is_kernel_line(const Kernel *kernel, char **fields, int field_count)
+{
+    return field_count >= 2 && !str_is_empty(fields[1])
+        && str_fits(fields[1], sizeof(kernel->id));
 }
 
 static void parse_kernel_list(Entry *entry, char *text)
@@ -67,7 +85,7 @@ static void parse_kernel_list(Entry *entry, char *text)
         } else if (!is_skipped_line(line)) {
             field_count = str_split(line, '|', fields, KERNEL_FIELD_COUNT);
 
-            if (field_count >= 2 && !str_is_empty(fields[1])) {
+            if (is_kernel_line(&entry->kernels[entry->kernel_count], fields, field_count)) {
                 parse_kernel(&entry->kernels[entry->kernel_count], fields, field_count);
                 entry->kernel_count++;
             }

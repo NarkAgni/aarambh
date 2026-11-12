@@ -1,3 +1,3 @@
 @oneshot grub
-Linux 6.11.0-108-generic|gnulinux-advanced-1111-root>gnulinux-6.11.0-108-generic-advanced-1111-root|\EFI\aarambh\linux\tuxedo\vmlinuz|\EFI\aarambh\linux\tuxedo\initrd.img|root=UUID=1111-root ro quiet splash
+Linux 6.11.0-108-generic|gnulinux-advanced-1111-root>gnulinux-6.11.0-108-generic-advanced-1111-root|\EFI\aarambh\linux\tuxedo\vmlinuz-<id>|\EFI\aarambh\linux\tuxedo\initrd-<id>.img|root=UUID=1111-root ro quiet splash
 Linux 6.11.0-108-generic (recovery)|gnulinux-advanced-1111-root>gnulinux-6.11.0-108-generic-recovery-1111-root

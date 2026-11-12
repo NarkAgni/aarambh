@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-11
+
+A reliability release: eleven bugs found in a review of 0.1.5, all in what
+happens when something is missing, damaged or fails halfway. Update with
+`git pull && make install`, then run `setup.sh` once on every other Linux.
+
+### Fixed
+
+- A damaged font could crash the menu before it appeared: an empty, cut short
+  or wrong file in `fonts/` was handed to the font reader unchecked. Every
+  font is now checked first (all tables inside the file and matching their
+  checksums); a font that fails is not used and its text is drawn with one of
+  the others.
+- Running out of memory while loading backgrounds crashed the menu (high
+  resolution screens with many entries). A failed allocation now leaves an
+  empty image, entries that got no background share a spare one that is
+  reserved up front, and when even that does not fit Aarambh exits cleanly so
+  the firmware starts the next boot entry.
+- A kernel was started directly although its initramfs was missing: when a
+  BLS entry named several initrd files and one did not exist, the others were
+  used alone (for example only the microcode). Such a kernel now starts
+  through the OS's own boot loader.
+- `$kernelopts` in a Fedora or RHEL boot entry replaced the whole line, so
+  options after it (`systemd.unit=rescue.target`, `rd.break`) were dropped.
+  GRUB variables are now filled in where they stand, from `grubenv`, and an
+  unset one (`$tuned_params`, `$tuned_initrd`) is empty as in GRUB.
+- A kernel command line longer than 767 characters was silently cut, which
+  could remove `root=` or the options of an encrypted disk. The limit is now
+  2047 characters, the kernel's own; a longer command line, a longer path or
+  more than four initramfs parts are never cut: that kernel starts through the
+  OS's boot loader and `aarambh-kernels` prints a warning.
+- Copying the kernel to the EFI partition reported success when the final
+  rename failed, and could leave a new kernel next to the initramfs of the
+  old one. Every step is checked now, and the copy is made as a pair
+  (`vmlinuz-<n>`, `initrd-<n>.img`) that the kernel list names, so a kernel is
+  never started with another kernel's initramfs.
+- With no operating system found (wrong EFI partition, deleted loaders) the
+  countdown started Restart or Firmware by itself, in a loop. The countdown
+  now only ever starts an operating system; otherwise the menu shows "No
+  bootable system found" and waits.
+- On an EFI partition shared by several systemd-boot installations, a boot
+  entry of another system was taken for this one when its `root=` only began
+  the same way (`/dev/sda1` and `/dev/sda10`, `LABEL=linux` and
+  `LABEL=linux-old`). The argument must now match exactly, and an entry that
+  carries another machine id is never taken.
+- A kernel picked under Advanced options was not booted when the choice could
+  not be stored for GRUB or systemd-boot (full or read-only EFI partition):
+  the loader was started anyway and booted its default kernel. Aarambh now
+  shows "Could not save the kernel choice, nothing was started" and returns to
+  the menu.
+- Writing a file from the menu reported success when the old file could not
+  be deleted, when only part of it was written or when flushing failed, so a
+  one-time kernel choice could stay in place. The file is now truncated
+  explicitly and every step counts.
+- A kernel list that could not be generated left an empty or half-written
+  `<os>.kernels`, and the Advanced options were gone. The list is now written
+  next to the old one and replaces it in one step, only when it is complete;
+  two kernel hooks that run at the same time wait for each other.
+- `aarambh.conf` could be emptied when rewriting it failed (`setup.sh`,
+  `uninstall.sh`, `aarambh --theme`); it is replaced in one step now.
+- A small memory leak while choosing the screen mode.
+
+### Changed
+
+- The direct-boot kernel copy is named `linux\<os>\vmlinuz-<n>` and
+  `initrd-<n>.img` instead of `vmlinuz` and `initrd.img`. The old files are
+  removed by the first `aarambh-kernels` run of this version.
+- `default restart` (or any other action) no longer starts by itself after the
+  countdown.
+- The menu writes `next-<os>.cfg` only when the kernel choice changed, not on
+  every boot.
+- Problems during a kernel update are no longer thrown away: the refresh
+  trigger sends them to the system log (`journalctl -t aarambh`) and still
+  never fails the package operation. `aarambh-debug` shows them.
+- Write-combining is turned on after the menu's files are loaded, so a
+  problem while loading them is not recorded as a write-combining failure.
+
+### Added
+
+- README: the installation is now six numbered steps with what you should see
+  after each, followed by everyday use, update, uninstall and recovery; the
+  details moved into a Reference part. New troubleshooting entries for the
+  new messages.
+- `make test` also runs `tests/hooks/failures.sh` (failure paths of the
+  hooks) and `tests/unit/run.sh` (parts of `aarambh.efi` built for Linux and
+  run against mocked UEFI services, with AddressSanitizer when installed).
+
 ## [0.1.5] - 2026-11-10
 
 ### Fixed
@@ -179,7 +266,8 @@ First public release.
 - QEMU test runner (`make qemu THEME=... DEFAULT=...`) and automated hook tests
   (`make test`).
 
-[Unreleased]: https://github.com/NarkAgni/aarambh/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/NarkAgni/aarambh/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/NarkAgni/aarambh/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/NarkAgni/aarambh/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/NarkAgni/aarambh/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/NarkAgni/aarambh/compare/v0.1.2...v0.1.3

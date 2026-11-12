@@ -19,7 +19,7 @@ FAILURES=0
 
 HOST_TOOLS="bash sh sed awk grep cat cp mv rm mkdir install stat cmp df sort cut tr head tail
             basename dirname realpath mktemp sync date touch tac ls id env find wc chmod ln
-            readlink printf true false rmdir od sha256sum uname"
+            readlink printf true false rmdir od sha256sum uname flock"
 SIGNING_TOOLS="openssl sbsign sbverify"
 
 trap 'rm -rf "$WORK"' EXIT
@@ -33,14 +33,40 @@ pass() {
     echo "  ok: $*"
 }
 
+# copied_file <key> <field>: the kernel copy (field 3) or its initrd (field 4)
+# that <key>.kernels boots, as a path on the fake ESP.
+copied_file() {
+    local path
+
+    path=$(awk -F'|' -v field="$2" '$3 ~ /aarambh.linux/ { print $field; exit }' \
+        "$ESP/EFI/aarambh/$1.kernels" | tr '\\' '/')
+
+    echo "$ESP$path"
+}
+
 # expect_initrd <key> <expected content>: the merged direct-boot initrd.
 expect_initrd() {
-    local file="$ESP/EFI/aarambh/linux/$1/initrd.img"
+    local file
+
+    file=$(copied_file "$1" 4)
 
     if [ "$(cat "$file" 2>/dev/null)" = "$2" ]; then
         pass "direct-boot initrd has the expected parts"
     else
         fail "direct-boot initrd content: $(cat "$file" 2>/dev/null | tr '\n' ' ')"
+    fi
+}
+
+# expect_one_generation <key>: only the pair the kernel list boots is kept.
+expect_one_generation() {
+    local files
+
+    files=$(ls "$ESP/EFI/aarambh/linux/$1" | tr '\n' ' ')
+
+    if [ "$files" = "$(basename "$(copied_file "$1" 4)") $(basename "$(copied_file "$1" 3)") " ]; then
+        pass "the kernel copy holds exactly the listed kernel and initrd"
+    else
+        fail "unexpected files next to the kernel copy: $files"
     fi
 }
 
@@ -120,8 +146,10 @@ run_uninstall() {
         bash "$REPO/hooks/uninstall.sh" > "$WORK/uninstall.log" 2>&1
 }
 
+# The id of a kernel copy depends on the signing key, which is new in every run.
 normalize() {
-    sed -e "s|$WORK|<work>|g" "$1"
+    sed -e "s|$WORK|<work>|g" \
+        -e 's/vmlinuz-[0-9a-f]\{12\}|/vmlinuz-<id>|/; s/initrd-[0-9a-f]\{12\}\.img|/initrd-<id>.img|/' "$1"
 }
 
 compare() {
@@ -299,7 +327,7 @@ scenario_ubuntu_secure_boot() {
         "grubx64.efi is the signed Aarambh"
     expect_same "$ESP/EFI/ubuntu/shimx64.efi" "$ESP/EFI/aarambh/shimx64.efi" "shim copied"
     expect_same "$ESP/EFI/ubuntu/mmx64.efi" "$ESP/EFI/aarambh/mmx64.efi" "MokManager copied"
-    expect_signed "$ESP/EFI/aarambh/linux/ubuntu/vmlinuz" "the direct-boot kernel"
+    expect_signed "$(copied_file ubuntu 3)" "the direct-boot kernel"
 
     local password="$ROOT_DIR/var/lib/aarambh/keys/mok-password"
 
@@ -353,6 +381,7 @@ scenario_ubuntu() {
         fail "the theme's restart frames were lost when the Plymouth theme was reinstalled"
     fi
     expect_initrd ubuntu "initrd.img-6.8.0-45-generic"
+    expect_one_generation ubuntu
     check_uninstall ubuntu
 }
 
